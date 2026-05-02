@@ -1,0 +1,2 @@
+"""HADES bridge package."""
+

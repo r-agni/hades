@@ -1,0 +1,190 @@
+#usda 1.0
+(
+    defaultPrim = "hades_phase_1"
+    metersPerUnit = 1
+    upAxis = "Z"
+)
+
+def Xform "hades_phase_1"
+{
+        def Cube "road"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (420, 0, 0, 0), (0, 10.0, 0, 0), (0, 0, 0.04, 0), (0, 0, 0.02, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "terrain_pad"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (520, 0, 0, 0), (0, 180, 0, 0), (0, 0, 0.02, 0), (0, 0, -0.05, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "convoy_0"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (6, 0, 0, 0), (0, 3, 0, 0), (0, 0, 1.6, 0), (-190.0, -3.0, 0.8, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "convoy_1"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (6, 0, 0, 0), (0, 3, 0, 0), (0, 0, 1.6, 0), (-204.0, 3.0, 0.8, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "parent_0"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (2.8, 0, 0, 0), (0, 2.8, 0, 0), (0, 0, 0.35, 0), (-208.0, 32.0, 34.0, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "parent_1"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (2.8, 0, 0, 0), (0, 2.8, 0, 0), (0, 0, 0.35, 0), (-172.0, -32.0, 34.0, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "small_0"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-166.0, 0.0, 18.0, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "small_1"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-178.0, 20.784609690826528, 18.42073549240395, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "small_2"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-202.0, 20.784609690826528, 18.45464871341284, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "small_3"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-214.0, 2.9391523179536475e-15, 18.070560004029932, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "small_4"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-202.0, -20.784609690826525, 17.621598752346035, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "small_5"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-178.0, -20.784609690826528, 17.52053786266843, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_0"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-190.0, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_1"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-167.64705882352942, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_2"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-145.29411764705884, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_3"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-122.94117647058823, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_4"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-100.58823529411765, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_5"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-78.23529411764707, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_6"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-55.882352941176464, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_7"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-33.529411764705884, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_8"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-11.176470588235304, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_9"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (11.176470588235276, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_10"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (33.529411764705856, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_11"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (55.882352941176464, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_12"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (78.23529411764707, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_13"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (100.58823529411762, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_14"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (122.94117647058823, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_15"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (145.29411764705878, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_16"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (167.6470588235294, 42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+        def Cube "edge_17"
+        {
+            double size = 1
+            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (190.0, -42.0, 1.2, 1) )
+            uniform token[] xformOpOrder = ["xformOp:transform"]
+        }
+}

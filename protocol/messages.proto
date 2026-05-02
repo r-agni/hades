@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package hades.protocol;
+
+message Pose {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+  double roll = 4;
+  double pitch = 5;
+  double yaw = 6;
+}
+
+message SimFrame {
+  double t = 1;
+  repeated DroneState drones = 2;
+  repeated EdgeState edges = 3;
+  repeated ConvoyState convoy = 4;
+  repeated CommsLink links = 5;
+  repeated OffloadEvent events = 6;
+  string environment = 7;
+}
+
+message DroneState {
+  string id = 1;
+  enum Tier {
+    PARENT = 0;
+    SMALL = 1;
+  }
+  Tier tier = 2;
+  Pose pose = 3;
+  double battery_pct = 4;
+  double compute_load = 5;
+  string current_task = 6;
+}
+
+message EdgeState {
+  string id = 1;
+  Pose pose = 2;
+  double battery_pct = 3;
+  double compute_load = 4;
+  bool alive = 5;
+  double compute_capacity_tops = 6;
+  double wifi_radius_m = 7;
+  double lora_radius_m = 8;
+}
+
+message ConvoyState {
+  string id = 1;
+  Pose pose = 2;
+  double speed_mps = 3;
+  double route_progress_pct = 4;
+}
+
+message CommsLink {
+  string from_id = 1;
+  string to_id = 2;
+  enum Type {
+    LORA = 0;
+    WIFI_MESH = 1;
+  }
+  Type type = 3;
+  double quality = 4;
+  bool active_payload = 5;
+}
+
+message OffloadEvent {
+  string parent_id = 1;
+  string task_id = 2;
+  string chosen_target = 3;
+  double expected_latency_ms = 4;
+  double actual_latency_ms = 5;
+  string reason = 6;
+}

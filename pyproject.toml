@@ -1,0 +1,19 @@
+[project]
+name = "hades"
+version = "0.1.0"
+description = "HADES Phase 1 simulation scaffold and bridge"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "websockets>=12.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
