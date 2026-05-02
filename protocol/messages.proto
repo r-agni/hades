@@ -19,6 +19,9 @@ message SimFrame {
   repeated CommsLink links = 5;
   repeated OffloadEvent events = 6;
   string environment = 7;
+  string scenario_phase = 8;
+  repeated string alerts = 9;
+  repeated ThreatState threats = 10;
 }
 
 message DroneState {
@@ -71,4 +74,11 @@ message OffloadEvent {
   double expected_latency_ms = 4;
   double actual_latency_ms = 5;
   string reason = 6;
+}
+
+message ThreatState {
+  string id = 1;
+  Pose pose = 2;
+  double confidence = 3;
+  bool active = 4;
 }

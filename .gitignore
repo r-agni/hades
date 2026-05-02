@@ -4,3 +4,6 @@ __pycache__/
 .eggs/
 dist/
 build/
+.env
+.hades-*.err
+.hades-*.log

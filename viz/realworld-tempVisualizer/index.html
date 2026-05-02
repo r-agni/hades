@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HADES Real-World Visualizer</title>
+  <link rel="stylesheet" href="/static/realworld-tempVisualizer/style.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="status" id="statusDot"></div>
+      <div>
+        <div class="logo">HADES <span>REALWORLD</span></div>
+        <div class="sub">live route, terrain, comms, sensing</div>
+      </div>
+    </div>
+    <form id="scenarioForm" class="controls">
+      <label>
+        Origin
+        <input id="originInput" name="origin" autocomplete="off" />
+      </label>
+      <label>
+        Destination
+        <input id="destinationInput" name="destination" autocomplete="off" />
+      </label>
+      <label>
+        Edges
+        <input id="edgeCountInput" name="edgeCount" type="number" min="1" max="64" />
+      </label>
+      <label>
+        Wi-Fi m
+        <input id="wifiInput" name="wifi" type="number" min="25" max="1500" step="25" />
+      </label>
+      <label>
+        Search m
+        <input id="bufferInput" name="buffer" type="number" min="100" max="5000" step="50" />
+      </label>
+      <button id="analyzeButton" type="submit">Analyze</button>
+    </form>
+  </header>
+
+  <main>
+    <section class="map-shell">
+      <div id="map"></div>
+      <div class="map-hud">
+        <div><span id="routeDistance">--</span><small>route</small></div>
+        <div><span id="coveragePct">--</span><small>coverage</small></div>
+        <div><span id="streamTime">--</span><small>sim</small></div>
+        <div><span id="computeMode">--</span><small>compute</small></div>
+      </div>
+    </section>
+    <aside>
+      <section class="panel-block">
+        <h2>Edge Recommendations</h2>
+        <div id="edgeList" class="edge-list"></div>
+      </section>
+      <section class="panel-block">
+        <h2>Sensing And Decisions</h2>
+        <div id="decisionList" class="decision-list"></div>
+      </section>
+      <section class="panel-block">
+        <h2>Live Offload</h2>
+        <div id="eventList" class="event-list"></div>
+      </section>
+      <div id="message" class="message"></div>
+    </aside>
+  </main>
+
+  <script src="/static/realworld-tempVisualizer/app.js"></script>
+</body>
+</html>

@@ -1,55 +1,56 @@
-"""FastAPI WebSocket bridge for HADES Phase 1."""
+"""HADES bridge server wiring routes and static viz assets."""
 
 from __future__ import annotations
 
-import asyncio
-import json
 import os
-from typing import Any
+from pathlib import Path
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
+from bridge.demo_publisher import DemoSimPublisher
 from bridge.sim_publisher import SyntheticSimPublisher
-from bridge.viz import VIZ_HTML
+from bridge.routes import health, frame as frame_route, realworld, stream as stream_route, viz_route
 from hades import config
 
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - dependency declared, defensive for partial envs
+    load_dotenv = None
 
-app = FastAPI(title="HADES Bridge", version="0.1.0")
-publisher = SyntheticSimPublisher(
-    environment=os.getenv("HADES_ENVIRONMENT", config.SCENE.environment_emergency)
-)
+if load_dotenv is not None:
+    load_dotenv()
 
-
-@app.get("/healthz")
-async def healthz() -> JSONResponse:
-    return JSONResponse({"ok": True, "tick_hz": config.BRIDGE.tick_hz})
-
-
-@app.get("/frame")
-async def frame() -> dict[str, Any]:
-    return publisher.now_frame().to_dict()
+app = FastAPI(title="HADES Bridge", version="0.2.0")
 
 
-@app.get("/viz", response_class=HTMLResponse)
-async def viz() -> str:
-    return VIZ_HTML
+def _make_publisher() -> object:
+    mode = os.getenv("HADES_PUBLISHER_MODE", "demo").strip().lower()
+    environment = os.getenv("HADES_ENVIRONMENT", config.SCENE.environment_emergency)
+    if mode == "synthetic":
+        return SyntheticSimPublisher(environment=environment)
+    return DemoSimPublisher(environment=environment)
 
 
-@app.websocket(config.BRIDGE.websocket_path)
-async def stream(websocket: WebSocket) -> None:
-    await websocket.accept()
-    delay_s = 1.0 / config.BRIDGE.tick_hz
-    try:
-        while True:
-            payload = publisher.now_frame().to_dict()
-            await websocket.send_text(json.dumps(payload, separators=(",", ":")))
-            await asyncio.sleep(delay_s)
-    except WebSocketDisconnect:
-        return
+# Publisher singleton shared across routes.
+publisher = _make_publisher()
+frame_route.set_publisher(publisher)
+stream_route.set_publisher(publisher)
+
+# Static files: viz/ folder served at /static.
+_VIZ_DIR = Path(__file__).parent.parent / "viz"
+app.mount("/static", StaticFiles(directory=str(_VIZ_DIR)), name="static")
+
+# Routes.
+app.include_router(health.router)
+app.include_router(frame_route.router)
+app.include_router(stream_route.router)
+app.include_router(viz_route.router)
+app.include_router(realworld.router)
 
 
+# Entry point.
 def main() -> None:
     uvicorn.run(
         "bridge.server:app",

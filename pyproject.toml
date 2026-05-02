@@ -5,6 +5,8 @@ description = "HADES Phase 1 simulation scaffold and bridge"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
     "uvicorn[standard]>=0.27",
 ]
 

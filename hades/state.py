@@ -8,7 +8,13 @@ from typing import Any, Literal
 
 DroneTier = Literal["PARENT", "SMALL"]
 LinkType = Literal["LORA", "WIFI_MESH"]
-OffloadReason = Literal["phase_1_placeholder", "min_cost", "no_wifi_in_range", "edge_overloaded"]
+OffloadReason = Literal[
+    "phase_1_placeholder",
+    "local_compute",
+    "min_cost",
+    "no_wifi_in_range",
+    "edge_overloaded",
+]
 
 
 @dataclass(frozen=True)
@@ -71,6 +77,14 @@ class OffloadEvent:
 
 
 @dataclass(frozen=True)
+class ThreatState:
+    id: str
+    pose: Pose
+    confidence: float
+    active: bool = True
+
+
+@dataclass(frozen=True)
 class SimFrame:
     t: float
     drones: list[DroneState] = field(default_factory=list)
@@ -78,6 +92,9 @@ class SimFrame:
     convoy: list[ConvoyState] = field(default_factory=list)
     links: list[CommsLink] = field(default_factory=list)
     events: list[OffloadEvent] = field(default_factory=list)
+    scenario_phase: str = "normal_escort"
+    alerts: list[str] = field(default_factory=list)
+    threats: list[ThreatState] = field(default_factory=list)
     environment: str = "generated_flat_road"
 
     def to_dict(self) -> dict[str, Any]:

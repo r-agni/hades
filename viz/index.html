@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>HADES Tactical Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<header>
+  <div class="brand-lockup">
+    <div class="conn-dot" id="connDot"></div>
+    <div>
+      <div class="logo">HA<span>DES</span></div>
+      <div class="subtitle">Synthetic Track 2 Viz</div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-item"><span class="hud-val" id="hudTime">0.0s</span><span>SIM TIME</span></div>
+    <div class="hud-item"><span class="hud-val green" id="hudBatt">--</span><span>MIN BATT</span></div>
+    <div class="hud-item"><span class="hud-val" id="hudLat">--ms</span><span>AVG LAT</span></div>
+    <div class="hud-item"><span class="hud-val" id="hudOffloads">0</span><span>OFFLOADS/MIN</span></div>
+    <div class="threat-pill clear" id="threatPill">CLEAR</div>
+  </div>
+</header>
+
+<main>
+  <section class="map-shell" aria-label="Tactical map">
+    <canvas id="map"></canvas>
+    <div class="map-overlay">
+      <div class="map-title">Convoy Escort Area</div>
+      <div class="legend">
+        <span><i class="legend-dot parent"></i>Parent</span>
+        <span><i class="legend-dot small"></i>Small</span>
+        <span><i class="legend-dot edge"></i>Edge</span>
+        <span><i class="legend-line wifi"></i>Wi-Fi</span>
+        <span><i class="legend-line lora"></i>LoRa</span>
+      </div>
+    </div>
+    <div class="map-readout">
+      <span>EO/IR Composite</span>
+      <span>Range rings: 150 m</span>
+      <span>Live synthetic feed</span>
+    </div>
+  </section>
+  <aside>
+    <div class="threat-banner" id="threatBanner"></div>
+    <div class="panel-body">
+
+      <section class="panel-section">
+        <div class="section-title">Scenario</div>
+        <div class="scenario-card">
+          <div class="scenario-phase" id="scenarioPhase">normal escort</div>
+          <div class="scenario-alerts" id="scenarioAlerts"></div>
+        </div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-title">Parent Drones</div>
+        <div id="parentCards"></div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-title">Small Drones</div>
+        <div id="smallCards" class="small-grid"></div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-title">
+          Edge Nodes <span id="edgeAliveCount" class="section-meta"></span>
+        </div>
+        <div class="edge-heatmap" id="edgeHeatmap"></div>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-title">Offload Decisions</div>
+        <div class="event-log" id="eventLog"></div>
+      </section>
+
+      <section class="convoy-section">
+        <div class="section-title">Convoy Route</div>
+        <div class="progress-track">
+          <div class="progress-fill" id="convoyBar" style="width:0%"></div>
+        </div>
+        <div class="progress-label">
+          <span id="convoyPct">0%</span>
+          <span id="convoySpeed">--</span>
+        </div>
+      </section>
+
+    </div>
+  </aside>
+</main>
+
+<script src="/static/tactical.js"></script>
+<script src="/static/panel.js"></script>
+<script>
+  // Boot
+  HADESTactical.init(document.getElementById('map'));
+
+  const dot = document.getElementById('connDot');
+
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(proto + '://' + location.host + '/stream');
+    ws.onopen  = function () { dot.className = 'conn-dot live'; };
+    ws.onclose = function () { dot.className = 'conn-dot'; setTimeout(connect, 1200); };
+    ws.onerror = function () { dot.className = 'conn-dot err'; };
+    ws.onmessage = function (ev) {
+      const frame = JSON.parse(ev.data);
+      HADESTactical.setFrame(frame);
+      HADESPanel.update(frame);
+    };
+  }
+  connect();
+</script>
+</body>
+</html>
