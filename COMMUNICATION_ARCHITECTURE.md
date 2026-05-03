@@ -12,7 +12,7 @@ HADES uses the term **child drone** for the small scout UAV tier implemented as 
 - **Convoy edge:** Receive-only embedded compute and command interface on the convoy. It receives threat intelligence and route directives, reports convoy position/progress, and can serve as a fallback compute endpoint.
 - **Bridge and sim frame:** The simulation publishes a 10 Hz `SimFrame` containing actors, links, threats, compute events, and convoy state for visualization, scoring, and training.
 
-```mermaid
+```text
 flowchart LR
     subgraph Children["Child Drone Layer - small_0..small_5"]
         C0["Child Drone\nRGB + IMU\n0.5 TOPS"]
@@ -73,7 +73,7 @@ Important invariant: **edge nodes and convoy vehicles do not perceive independen
 | **Convoy edge <-> any actor** | WiFi mesh only | `<=150 m` |
 | **Child -> Static edge** | Forbidden direct path | Must relay through a parent |
 
-```mermaid
+```text
 flowchart TD
     A["Actor positions at tick t"] --> B["Classify actor pair\nCHILD, PARENT, EDGE, CONVOY"]
     B --> C{"Is pair allowed?"}
@@ -117,7 +117,7 @@ HADES can be understood as a small set of recurring messages passed across the g
 | **Directive** | Parent policy/controller | Child drones, convoy | Move, hold, relay, track, return, reroute, slow/hold |
 | **RouteIntent** | Convoy router | Convoy vehicle, bridge | Active route, progress, threat_ahead |
 
-```mermaid
+```text
 sequenceDiagram
     participant C as Child Drone
     participant P as Parent Drone
@@ -157,7 +157,7 @@ Parent-to-convoy or router directives:
 - **Slow or hold:** Reduce route progress when detection confidence is uncertain.
 - **Resume:** Continue once the ahead corridor is observed and threat cost is acceptable.
 
-```mermaid
+```text
 flowchart LR
     S["Fused swarm state"] --> P["Parent policy/controller"]
     P --> C1["Child directive\nmove/relay/track/hold"]
@@ -179,7 +179,7 @@ Waterfall:
 4. **Parent -> convoy edge:** If static edge is not available, use the convoy edge fallback.
 5. **Drop:** If no legal target has compute headroom, the job is dropped and recorded.
 
-```mermaid
+```text
 flowchart TD
     J["Compute task generated"] --> L{"Local task and local headroom?"}
     L -- "Yes" --> A["Run locally\nlatency=0"]
@@ -232,7 +232,7 @@ Edge-node processing:
 - **Heavy inference:** Edge nodes run jobs that exceed parent or child capacity.
 - **Result return:** Edge results return as confidence, location, latency, and dropped/completed status.
 
-```mermaid
+```text
 flowchart TD
     subgraph Child["Child Drone"]
         CRGB["RGB frame"] --> CM["MobileNet / compact visual feature"]
@@ -279,7 +279,7 @@ Fusion logic, step by step:
 
 The system makes decisions once per simulation tick.
 
-```mermaid
+```text
 flowchart TD
     A["Tick t"] --> B["Read actor poses, battery, compute load"]
     B --> C["Read drone sensors\nRGB/depth/thermal/LiDAR/IMU"]
@@ -328,7 +328,7 @@ Parent observation includes:
 - **Nearest edge free capacity and latency.**
 - **Compact camera feature.**
 
-```mermaid
+```text
 flowchart LR
     SD["Sensor data"] --> OB["ObsBuilder"]
     CG["CommsGraph\nlink quality + latency"] --> OB
@@ -346,7 +346,7 @@ flowchart LR
 
 This is the core HADES scenario: a child drone detects a threat near the direct route, the parent fuses the report, edge compute strengthens confidence, and the convoy switches to a safer bypass.
 
-```mermaid
+```text
 sequenceDiagram
     participant S as small_2
     participant P as parent_0

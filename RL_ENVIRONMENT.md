@@ -18,7 +18,7 @@ This is a multi-agent, partially observable, cooperative task.
 - **Constrained:** Comms, compute, battery, and sensor limits affect every decision.
 - **Mission-based:** The policy is scored by convoy outcome, not isolated drone behavior.
 
-```mermaid
+```text
 flowchart TD
     A["Scenario state\nterrain, actors, threats, route"] --> B["Per-agent observations"]
     B --> C["MAPPO policies\nparents + children"]
@@ -55,7 +55,7 @@ There are two execution modes:
 - **Live Isaac mode:** Uses Isaac Sim/Isaac Lab, drone physics, procedural cameras, and controller calls.
 - **Headless training mode:** Uses the Track 2 publisher and stubs where needed so training/testing can run without full Isaac Sim installed.
 
-```mermaid
+```text
 flowchart LR
     subgraph Live["Live Isaac Mode"]
         L1["Isaac Sim SimulationApp"]
@@ -124,7 +124,7 @@ Child drones use discrete control:
 6 = RELAY_NOW
 ```
 
-```mermaid
+```text
 flowchart TD
     A["MAPPO action"] --> B{"Agent tier"}
     B -- "Parent" --> C["Box(4)\nvx, vy, vz, yaw_rate"]
@@ -163,7 +163,7 @@ Child observation target:
 | Convoy relative position and progress | Escort geometry |
 | Compact camera features | Local visual context |
 
-```mermaid
+```text
 flowchart LR
     A["Drone sensors\nRGB/depth/thermal/LiDAR/IMU"] --> F["Feature extraction"]
     B["CommsGraph\nquality + latency"] --> O["ObsBuilder"]
@@ -188,7 +188,7 @@ Sensor fusion happens before and during observation construction.
 5. **ObsBuilder** converts fused state into agent-specific vectors.
 6. **RewardCalculator** rewards new detections and confidence improvement.
 
-```mermaid
+```text
 sequenceDiagram
     participant S as Child Drone
     participant P as Parent Drone
@@ -241,7 +241,7 @@ R_total =
   - R_crash
 ```
 
-```mermaid
+```text
 flowchart TD
     A["Current SimFrame"] --> B["Route progress delta"]
     A --> C["Convoy hit / endpoint"]
@@ -262,7 +262,7 @@ flowchart TD
 
 One episode represents a convoy escort attempt through the scenario.
 
-```mermaid
+```text
 flowchart TD
     A["reset"] --> B["Spawn/reset convoy, drones, threats, compute"]
     B --> C["Initial observation"]
@@ -294,7 +294,7 @@ HADES uses MAPPO-style training because the task needs centralized learning of t
 - **Parallel rollouts:** Many environment copies collect experience to stabilize training.
 - **Checkpointing:** Policies are saved for evaluation and demo runs.
 
-```mermaid
+```text
 flowchart LR
     E1["Env 1"] --> R["Rollout memory"]
     E2["Env 2"] --> R
@@ -377,7 +377,7 @@ A trained policy should be judged by mission metrics:
 | `mean_link_quality` | Network health |
 | `total_return` | RL training signal |
 
-```mermaid
+```text
 flowchart LR
     P["Trained policy"] --> E["Evaluation episodes"]
     E --> S["EpisodeScore"]

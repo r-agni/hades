@@ -20,7 +20,7 @@ The environment is therefore designed as a mission rehearsal and efficacy-testin
 
 HADES combines real-world geospatial context, OpenUSD assets, Isaac Sim physics, and mission-specific simulation logic.
 
-```mermaid
+```text
 flowchart TD
     A["Real-world area\nLaughlin/Bullhead corridor"] --> B["Cesium World Terrain\nand aerial imagery"]
     A --> C["Route/elevation context\nroads, bypasses, chokepoints"]
@@ -79,7 +79,7 @@ Threat zones:
 | `choke_a` | Central bridge/chokepoint threat area |
 | `flank_b` | Bypass-entry threat area |
 
-```mermaid
+```text
 flowchart LR
     START["Convoy start\nx=-580"] --> M1["main route\nfast / exposed"]
     START --> N1["north_bypass\nlonger / partial cover"]
@@ -103,7 +103,7 @@ The scene uses separate actor tiers so the environment tests hierarchy, not just
 | **Static edge nodes** | 18 | Passive compute servers placed along route/network geometry |
 | **Convoy vehicles** | 2 | Protected assets that receive intelligence and route directives |
 
-```mermaid
+```text
 flowchart TD
     subgraph Air["Aerial Layer"]
         P0["parent_0\n100 TOPS"]
@@ -155,7 +155,7 @@ The environment simulates radio and network behavior through `CommsGraph`.
 - **Latency:** Increases with active-link congestion and distance.
 - **Relay paths:** Multi-hop paths exist only when graph connectivity allows them.
 
-```mermaid
+```text
 flowchart TD
     A["Actor positions"] --> B["Pairwise distance"]
     B --> C{"Allowed pair?"}
@@ -188,7 +188,7 @@ The environment treats AI inference as a scarce resource.
 | **Static edge node** | `50 TOPS` | Heavy inference if reachable |
 | **Convoy edge** | Edge-class fallback | Last-resort compute if reachable |
 
-```mermaid
+```text
 flowchart LR
     T["Sensor task"] --> L{"Fits local budget?"}
     L -- "Yes" --> LOCAL["Run locally"]
@@ -237,7 +237,7 @@ HADES models defensive threat conditions at the mission layer.
 - **Edge failure:** Static nodes can be unreachable, overloaded, or marked dead.
 - **Partial observability:** No single actor has total ground truth.
 
-```mermaid
+```text
 flowchart TD
     TH["Threat appears near route"] --> S["Drone sensor sees candidate"]
     S --> C{"Comms path valid?"}
@@ -256,7 +256,7 @@ flowchart TD
 
 The realistic environment supports a planning loop that starts with a real location and ends with measurable mission results.
 
-```mermaid
+```text
 flowchart TD
     A["Select real AOI"] --> B["Load terrain/imagery\nCesium or fallback terrain"]
     B --> C["Define route candidates\nmain + bypasses"]

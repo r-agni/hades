@@ -14,6 +14,8 @@ These videos are temporary simulations and early visual references. They are not
 |---|---|---|
 | [![HADES simV1 temporary simulation](https://img.youtube.com/vi/UTx-ue-XfFI/hqdefault.jpg)](https://youtu.be/UTx-ue-XfFI) | [HADES simV1](https://youtu.be/UTx-ue-XfFI) | Temporary simulation reference for the current convoy/swarm concept. |
 | [![HADES simv3 temporary simulation](https://img.youtube.com/vi/gaawL6yjg1o/hqdefault.jpg)](https://youtu.be/gaawL6yjg1o) | [HADES simv3](https://youtu.be/gaawL6yjg1o) | Temporary simulation reference that will be replaced by final Isaac captures. |
+| [![HADES temporary simulation reference](https://img.youtube.com/vi/2omBTuV8wPA/hqdefault.jpg)](https://youtu.be/2omBTuV8wPA) | [HADES sim reference](https://youtu.be/2omBTuV8wPA) | Temporary simulation/media reference for the evolving HADES concept. |
+| [![HADES temporary environment reference](https://img.youtube.com/vi/kKx2W4P_vSQ/hqdefault.jpg)](https://youtu.be/kKx2W4P_vSQ) | [HADES environment reference](https://youtu.be/kKx2W4P_vSQ) | Temporary environment/media reference that will be replaced by final Isaac/Cesium captures. |
 
 ![Public-domain drone swarm field experiment from DVIDS](https://d1ldvf68ux039x.cloudfront.net/thumbs/photos/2112/6968384/850w_q95.jpg)
 
