@@ -8,3 +8,4 @@ build/
 .env
 assets/terrain/
 recordings
+isaac/*.cesium_tokenized.*.usda

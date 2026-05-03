@@ -66,3 +66,13 @@ def test_threat_response_scouts_investigate_without_rigid_recenter() -> None:
     threat = frame.threats[0].pose
     scout = _drone(frame, "small_0").pose
     assert math.hypot(scout.x - threat.x, scout.y - threat.y) < 55.0
+
+
+def test_scouts_resume_downroute_progress_after_investigation() -> None:
+    pub = Track2SimPublisher(stub=True)
+    investigating = pub.frame_at(25.0)
+    resumed = pub.frame_at(50.0)
+
+    assert _drone(investigating, "small_0").current_task.startswith("investigate_threat_")
+    assert _drone(resumed, "small_0").current_task.startswith("resume_scout_")
+    assert _drone(resumed, "small_0").pose.x > _drone(investigating, "small_0").pose.x + 140.0

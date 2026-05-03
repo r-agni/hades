@@ -23,6 +23,7 @@ def test_cesium_defaults_point_to_requested_release(monkeypatch) -> None:
         assert "linux-x86_64" in cfg.extension_zip_url
     assert cfg.latitude_deg == 35.17
     assert cfg.longitude_deg == -114.57
+    assert cfg.height_m == 165.0
 
 
 def test_cesium_token_is_required(monkeypatch) -> None:

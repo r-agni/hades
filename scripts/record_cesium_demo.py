@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from hades.cesium import assert_isaac_runtime_compatible, runtime_config  # noqa: E402
+from scripts.cesium_presentation import apply_actor_presentation, configure_cesium_map, update_visual_markers  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,6 +36,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--initial-settle-frames", type=int, default=90)
     parser.add_argument("--extension-dir", type=Path, default=Path.home() / "Documents" / "Kit" / "Shared" / "exts")
     parser.add_argument("--camera", default="/hades_phase_1/RecordCamera")
+    parser.add_argument("--map-mode", choices=("world-terrain", "photorealistic"), default="photorealistic")
     return parser.parse_args()
 
 
@@ -217,6 +219,8 @@ async def _record(args: argparse.Namespace) -> None:
 
     await _open_stage(args.stage.resolve())
     _apply_cesium_config(cfg)
+    configure_cesium_map(args.map_mode, cfg.ion_token)
+    apply_actor_presentation()
     viewport = _set_camera(args.camera)
 
     app = omni.kit.app.get_app()
@@ -238,6 +242,7 @@ async def _record(args: argparse.Namespace) -> None:
         t = tick / args.fps
         frame = publisher.frame_at(t)
         driver.apply(frame)
+        update_visual_markers(frame, follow_camera=True)
         for _ in range(args.settle_frames):
             app.update()
 

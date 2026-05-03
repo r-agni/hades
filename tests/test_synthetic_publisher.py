@@ -33,8 +33,10 @@ def test_isaac_stage_uses_real_asset_references() -> None:
     assert "track_solid_line.usd" not in scene_text
     assert "../assets/terrain/terrain.usda" not in scene_text
     assert "CesiumGeoreferencePrim" in scene_text
+    assert "cesium:georeferenceOrigin:height = 165" in scene_text
     assert "Cesium_World_Terrain" in scene_text
     assert "Bing_Maps_Aerial_imagery" in scene_text
+    assert "cesium:maximumScreenSpaceError = 4" in scene_text
     assert "cesium_laughlin_bullhead_world_terrain" in scene_text
     assert "Carter/carter_v1_physx_lidar.usd" in scene_text
     assert "../assets/drones/omnidrones/usd/neo11.usd" in scene_text
@@ -43,6 +45,9 @@ def test_isaac_stage_uses_real_asset_references() -> None:
     assert "../assets/drones/omnidrones/usd/cf2x_isaac.usd" in scene_text
     assert "Crazyflie/cf2x.usd" not in scene_text
     assert "Server_1U_A_01.usd" in scene_text
+    assert "xformOp:scale = (8.0, 8.0, 8.0)" in scene_text
+    assert "xformOp:scale = (32.0, 32.0, 32.0)" in scene_text
+    assert "xformOp:scale = (0.16, 0.16, 0.16)" in scene_text
     assert Path("assets/drones/omnidrones/usd/neo11.usd").exists()
     assert Path("assets/drones/omnidrones/usd/neo11.yaml").exists()
     assert Path("assets/drones/omnidrones/usd/Props/neo11_instanceable_meshes.usd").exists()

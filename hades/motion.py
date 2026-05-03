@@ -21,12 +21,7 @@ def smoothstep(value: float) -> float:
 def route_pose(route_id: str, progress_pct: float, z: float) -> Pose:
     """Sample a configured route by percentage of path length."""
     waypoints = config.ROUTE_WAYPOINTS.get(route_id, config.ROUTE_WAYPOINTS["main"])
-    segments: list[tuple[float, float, float, float, float]] = []
-    total = 0.0
-    for (ax, ay), (bx, by) in zip(waypoints, waypoints[1:]):
-        length = math.hypot(bx - ax, by - ay)
-        segments.append((float(ax), float(ay), float(bx), float(by), length))
-        total += length
+    segments, total = _route_segments(waypoints)
 
     if not segments or total <= 0.0:
         x, y = waypoints[-1]
@@ -45,6 +40,23 @@ def route_pose(route_id: str, progress_pct: float, z: float) -> Pose:
 
     ax, ay, bx, by, _ = segments[-1]
     return Pose(x=bx, y=by, z=z, yaw=math.atan2(by - ay, bx - ax))
+
+
+def route_length_m(route_id: str) -> float:
+    """Return the configured route length in meters."""
+    waypoints = config.ROUTE_WAYPOINTS.get(route_id, config.ROUTE_WAYPOINTS["main"])
+    _, total = _route_segments(waypoints)
+    return total
+
+
+def _route_segments(waypoints: list[tuple[float, float]]) -> tuple[list[tuple[float, float, float, float, float]], float]:
+    segments: list[tuple[float, float, float, float, float]] = []
+    total = 0.0
+    for (ax, ay), (bx, by) in zip(waypoints, waypoints[1:]):
+        length = math.hypot(bx - ax, by - ay)
+        segments.append((float(ax), float(ay), float(bx), float(by), length))
+        total += length
+    return segments, total
 
 
 def blend_pose(a: Pose, b: Pose, alpha: float) -> Pose:
@@ -101,11 +113,13 @@ class DroneMotionModel:
             origin = Pose(x=0.0, y=0.0, z=0.0)
         else:
             origin = convoy[0].pose
+        convoy_progress = convoy[0].route_progress_pct if convoy else 0.0
+        route_id = active_route or (convoy[0].active_route_id if convoy else "main")
         threats = threats or []
 
         drones: list[DroneState] = []
         for idx in range(config.COUNTS.parent_drones):
-            pose = self._parent_pose(idx, t, origin, bool(threats))
+            pose = self._parent_pose(idx, t, origin, convoy_progress, route_id, bool(threats))
             drones.append(
                 DroneState(
                     id=f"parent_{idx}",
@@ -118,7 +132,7 @@ class DroneMotionModel:
             )
 
         for idx in range(config.COUNTS.small_drones):
-            pose, task = self._small_pose(idx, t, origin, active_route, threats)
+            pose, task = self._small_pose(idx, t, origin, convoy_progress, route_id, threats)
             drones.append(
                 DroneState(
                     id=f"small_{idx}",
@@ -132,53 +146,71 @@ class DroneMotionModel:
 
         return drones
 
-    def _parent_pose(self, idx: int, t: float, origin: Pose, threat_active: bool) -> Pose:
+    def _parent_pose(
+        self,
+        idx: int,
+        t: float,
+        origin: Pose,
+        convoy_progress: float,
+        active_route: str,
+        threat_active: bool,
+    ) -> Pose:
         sign = 1.0 if idx == 0 else -1.0
-        base_ahead = 32.0 if idx == 0 else 8.0
+        base_ahead = 92.0 if idx == 0 else 48.0
         base_lateral = sign * (54.0 if not threat_active else 72.0)
-        ahead = base_ahead + self._wave(idx, 0, t, 10.0, 18.0) + self._wave(idx, 1, t, 4.0, 7.0)
+        ahead = base_ahead + self._wave(idx, 0, t, 18.0, 28.0) + self._wave(idx, 1, t, 8.0, 11.0)
         lateral = base_lateral + self._wave(idx, 2, t, 11.0, 15.0)
         altitude = (
             config.SCENE.parent_hover_altitude_m
             + (3.0 if threat_active else 0.0)
             + self._wave(idx, 3, t, 1.2, 11.0)
         )
-        pose = self._local_pose(origin, ahead, lateral, altitude)
-        return self._with_attitude(pose, origin.yaw + 0.22 * sign * math.sin(t / 8.0 + idx), idx, t, scale=0.6)
+        progress = convoy_progress + self._meters_to_progress(active_route, ahead)
+        pose = self._route_lane_pose(active_route, progress, lateral, altitude)
+        yaw = pose.yaw + 0.12 * sign * math.sin(t / 8.0 + idx)
+        return self._with_attitude(pose, yaw, idx, t, scale=0.6)
 
     def _small_pose(
         self,
         idx: int,
         t: float,
         origin: Pose,
+        convoy_progress: float,
         active_route: str,
         threats: list[ThreatState],
     ) -> tuple[Pose, str]:
         role = self._SCOUT_ROLES[idx]
-        ahead = role.ahead_m + self._wave(idx, 4, t, 13.0, 13.0) + self._wave(idx, 5, t, 5.0, 5.8)
+        scan_extent = 70.0 if idx < 2 else 42.0
+        scan = 0.5 + 0.5 * math.sin((2.0 * math.pi * t / (26.0 + 2.0 * idx)) + self._phase(idx, 11))
+        ahead = role.ahead_m + scan_extent * scan + self._wave(idx, 4, t, 14.0, 23.0)
         lateral = role.lateral_m + self._wave(idx, 6, t, 15.0, 16.0)
         altitude = role.altitude_m + self._wave(idx, 7, t, 1.0, 8.5)
         if threats and idx in (2, 3):
-            ahead += 16.0
+            ahead += 34.0
             lateral *= 1.18
             altitude += 1.5
 
-        scout_pose = self._local_pose(origin, ahead, lateral, altitude)
+        progress = convoy_progress + self._meters_to_progress(active_route, ahead)
+        scout_pose = self._route_lane_pose(active_route, progress, lateral, altitude)
         task = role.task
 
         if threats and idx in (0, 1):
             threat = threats[idx % len(threats)]
-            blend = smoothstep((t - 15.0) / 5.0)
-            orbit = (0.48 * t) + (math.pi if idx == 0 else 0.0) + self._phase(idx, 8)
-            radius = 36.0 + 5.0 * math.sin(0.31 * t + idx)
+            elapsed = max(0.0, t - 15.0)
+            arrive = smoothstep(elapsed / 6.0)
+            depart = smoothstep((elapsed - 20.0) / 14.0)
+            blend = arrive * (1.0 - depart)
+            sign = 1.0 if idx == 0 else -1.0
+            standoff_x = threat.pose.x - 22.0 + 10.0 * idx + self._wave(idx, 8, t, 4.0, 18.0)
+            standoff_y = threat.pose.y + sign * (38.0 + self._wave(idx, 9, t, 5.0, 15.0))
             inspect_pose = Pose(
-                x=threat.pose.x + radius * math.cos(orbit),
-                y=threat.pose.y + radius * math.sin(orbit),
+                x=standoff_x,
+                y=standoff_y,
                 z=config.SCENE.small_hover_altitude_m + 6.0 + 1.0 * math.sin(0.7 * t + idx),
-                yaw=orbit + math.pi,
+                yaw=math.atan2(threat.pose.y - standoff_y, threat.pose.x - standoff_x),
             )
             pose = blend_pose(scout_pose, inspect_pose, blend)
-            task = f"investigate_{threat.id}"
+            task = f"investigate_{threat.id}" if blend > 0.25 else f"resume_scout_{active_route}"
         else:
             pose = scout_pose
             if threats and idx in (2, 3):
@@ -188,6 +220,21 @@ class DroneMotionModel:
         if abs(heading) < 1e-6:
             heading = origin.yaw + 0.35 * math.sin(t / 5.0 + idx)
         return self._with_attitude(pose, heading, idx, t, scale=1.0), task
+
+    def _route_lane_pose(self, route_id: str, progress_pct: float, lateral: float, altitude: float) -> Pose:
+        base = route_pose(route_id, progress_pct, altitude)
+        return Pose(
+            x=base.x - math.sin(base.yaw) * lateral,
+            y=base.y + math.cos(base.yaw) * lateral,
+            z=altitude,
+            yaw=base.yaw,
+        )
+
+    def _meters_to_progress(self, route_id: str, meters: float) -> float:
+        length = route_length_m(route_id)
+        if length <= 1e-6:
+            return 0.0
+        return 100.0 * meters / length
 
     def _local_pose(self, origin: Pose, ahead: float, lateral: float, altitude: float) -> Pose:
         forward_x = math.cos(origin.yaw)

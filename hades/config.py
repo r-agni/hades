@@ -49,7 +49,7 @@ class SceneConfig:
     small_hover_altitude_m: float = 18.0
     latitude_deg: float = 35.17
     longitude_deg: float = -114.57
-    height_m: float = 0.0
+    height_m: float = 165.0
 
 
 @dataclass(frozen=True)

@@ -13,7 +13,7 @@ def CesiumDataPrim "Cesium"
 def CesiumGeoreferencePrim "CesiumGeoreference"
 {
     custom string hades:environment = "cesium_laughlin_bullhead_world_terrain"
-    double cesium:georeferenceOrigin:height = 0
+    double cesium:georeferenceOrigin:height = 165
     double cesium:georeferenceOrigin:latitude = 35.17
     double cesium:georeferenceOrigin:longitude = -114.57
 }
@@ -24,6 +24,11 @@ def CesiumTilesetPrim "Cesium_World_Terrain"
     string cesium:ionAccessToken = ""
     int64 cesium:ionAssetId = 1
     rel cesium:ionServerBinding = </CesiumServers/IonOfficial>
+    bool cesium:forbidHoles = true
+    uint cesium:maximumSimultaneousTileLoads = 64
+    uint64 cesium:maximumCachedBytes = 2147483648
+    float cesium:maximumScreenSpaceError = 4
+    bool cesium:smoothNormals = true
     uniform token cesium:sourceType = "ion"
     prepend rel cesium:rasterOverlayBinding = </Cesium_World_Terrain/Bing_Maps_Aerial_imagery>
 
@@ -31,6 +36,9 @@ def CesiumTilesetPrim "Cesium_World_Terrain"
     {
         string cesium:ionAccessToken = ""
         int64 cesium:ionAssetId = 2
+        uniform float cesium:maximumScreenSpaceError = 1
+        uniform int cesium:maximumTextureSize = 4096
+        uint cesium:maximumSimultaneousTileLoads = 32
         rel cesium:ionServerBinding = </CesiumServers/IonOfficial>
     }
 }
@@ -96,7 +104,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-548.0, 54.0, 34.0)
         double3 xformOp:rotateXYZ = (0, 0, 0)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (8.0, 8.0, 8.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
 
         def Xform "lidar_mount"
@@ -118,7 +126,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-572.0, -54.0, 34.0)
         double3 xformOp:rotateXYZ = (0, 0, 0)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (8.0, 8.0, 8.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
 
         def Xform "lidar_mount"
@@ -141,7 +149,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-504.0, 44.0, 22.0)
         double3 xformOp:rotateXYZ = (0, 0, 8)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (32.0, 32.0, 32.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         def Xform "imu_mount"
         {
@@ -156,7 +164,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-512.0, -40.0, 21.5)
         double3 xformOp:rotateXYZ = (0, 0, -12)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (32.0, 32.0, 32.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         def Xform "imu_mount"
         {
@@ -171,7 +179,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-556.0, 80.0, 20.0)
         double3 xformOp:rotateXYZ = (0, 0, 18)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (32.0, 32.0, 32.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         def Xform "imu_mount"
         {
@@ -186,7 +194,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-568.0, -76.0, 19.5)
         double3 xformOp:rotateXYZ = (0, 0, -22)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (32.0, 32.0, 32.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         def Xform "imu_mount"
         {
@@ -201,7 +209,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-622.0, 38.0, 18.5)
         double3 xformOp:rotateXYZ = (0, 0, 170)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (32.0, 32.0, 32.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         def Xform "imu_mount"
         {
@@ -216,7 +224,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-636.0, -32.0, 18.0)
         double3 xformOp:rotateXYZ = (0, 0, -168)
-        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        double3 xformOp:scale = (32.0, 32.0, 32.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
         def Xform "imu_mount"
         {
@@ -232,7 +240,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-560, 84, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, 78)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
@@ -242,7 +250,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-430, -132, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, -104)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
@@ -252,7 +260,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-252, 104, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, 52)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
@@ -262,7 +270,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (-68, -146, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, -138)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
@@ -272,7 +280,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (96, 118, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, 37)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
@@ -282,7 +290,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (286, -92, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, -83)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
@@ -292,7 +300,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (420, -126, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, -116)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
@@ -302,7 +310,7 @@ def Xform "hades_phase_1"
     {
         double3 xformOp:translate = (566, 54, 1.2)
         double3 xformOp:rotateXYZ = (0, 0, 66)
-        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        double3 xformOp:scale = (0.16, 0.16, 0.16)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
