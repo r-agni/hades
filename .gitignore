@@ -1,8 +1,10 @@
 __pycache__/
 *.py[cod]
+.venv*/
 *.egg-info/
 .eggs/
 dist/
 build/
 .env
 assets/terrain/
+recordings

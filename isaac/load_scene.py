@@ -1,88 +1,41 @@
-"""Load the HADES Phase 1 scene inside Isaac Sim.
-
-Usage (pip-installed Isaac Sim 5.1):
-
-    python load_scene.py [path/to/scene.usda] [--headless]
-
-SimulationApp must be created before any omni/carb imports so that the Kit
-kernel is bootstrapped first.
-"""
+"""Load the HADES scene inside Isaac Sim and keep it running."""
 
 from __future__ import annotations
 
 import asyncio
-import math
+import os
 import sys
 from pathlib import Path
 
-# Bootstrap Kit kernel before any omni/carb imports
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from isaacsim import SimulationApp
 
-_headless = "--headless" in sys.argv or True   # always headless on the remote H100
+
+_headless = "--headless" in sys.argv or True
 _sim_app = SimulationApp({"headless": _headless, "anti_aliasing": 0})
 
-import carb  # noqa: E402 — must be after SimulationApp
+import carb  # noqa: E402
 import omni.kit.app  # noqa: E402
 import omni.usd  # noqa: E402
 from omni.isaac.core import World  # noqa: E402
 from omni.isaac.core.prims import RigidPrim, XFormPrim  # noqa: E402
 from pxr import Gf, UsdGeom  # noqa: E402
 
-
-# ---------------------------------------------------------------------------
-# Actor layout — must match scene.usda and hades/config.py
-# ---------------------------------------------------------------------------
-
-ROUTE_START_X = -580.0
-ROUTE_END_X = 580.0
-ROUTE_LENGTH = ROUTE_END_X - ROUTE_START_X
-EDGE_COUNT = 18
-
-PARENT_HOVER_Z = 34.0
-SMALL_HOVER_Z = 18.0
-SMALL_RING_R = 24.0
-PARENT_Y_OFF = 32.0
-EDGE_Y_OFF = 42.0
+from hades.layout import EDGE_DEPLOYMENTS, convoy_deployments, parent_deployments, small_deployments  # noqa: E402
+from hades.cesium import runtime_config  # noqa: E402
 
 
-def _edge_positions() -> list[tuple[float, float, float]]:
-    step = ROUTE_LENGTH / (EDGE_COUNT - 1)
-    positions = []
-    for i in range(EDGE_COUNT):
-        x = ROUTE_START_X + i * step
-        y = EDGE_Y_OFF * (-1.0 if i % 2 else 1.0)
-        positions.append((x, y, 1.2))
-    return positions
-
-
-def _small_positions() -> list[tuple[float, float, float]]:
-    convoy_x = ROUTE_START_X
-    positions = []
-    for i in range(6):
-        angle = 2.0 * math.pi * i / 6
-        x = convoy_x + SMALL_RING_R * math.cos(angle)
-        y = SMALL_RING_R * math.sin(angle)
-        positions.append((x, y, SMALL_HOVER_Z))
-    return positions
-
-
-ACTOR_PRIMS: dict[str, list[tuple[str, tuple[float, float, float]]]] = {
-    "parents": [
-        ("parent_0", (ROUTE_START_X - 18.0, PARENT_Y_OFF, PARENT_HOVER_Z)),
-        ("parent_1", (ROUTE_START_X + 18.0, -PARENT_Y_OFF, PARENT_HOVER_Z)),
-    ],
-    "smalls": [(f"small_{i}", pos) for i, pos in enumerate(_small_positions())],
-    "edges": [(f"edge_{i}", pos) for i, pos in enumerate(_edge_positions())],
-    "convoy": [
-        ("convoy_0", (ROUTE_START_X, -3.0, 0.8)),
-        ("convoy_1", (ROUTE_START_X - 14.0, 3.0, 0.8)),
-    ],
+ACTOR_PRIMS: dict[str, list[tuple[str, tuple[float, float, float], float]]] = {
+    "parents": [(p.id, (p.x, p.y, p.z), p.yaw_deg) for p in parent_deployments()],
+    "smalls": [(p.id, (p.x, p.y, p.z), p.yaw_deg) for p in small_deployments()],
+    "edges": [(p.id, (p.x, p.y, p.z), p.yaw_deg) for p in EDGE_DEPLOYMENTS],
+    "convoy": [(p.id, (p.x, p.y, p.z), p.yaw_deg) for p in convoy_deployments()],
 }
 
-
-# ---------------------------------------------------------------------------
-# Stage helpers
-# ---------------------------------------------------------------------------
 
 def _log(msg: str) -> None:
     carb.log_info(f"[HADES load_scene] {msg}")
@@ -100,13 +53,42 @@ async def _open_stage(path: str) -> None:
     _log(f"Stage opened: {path}")
 
 
+def _apply_cesium_env() -> None:
+    """Inject Cesium token/georeference settings when available."""
+    if not os.environ.get("CESIUM_ION_TOKEN"):
+        _log("CESIUM_ION_TOKEN not set; Cesium terrain may not stream.")
+        return
+
+    cfg = runtime_config(require_token=True)
+    stage = omni.usd.get_context().get_stage()
+    updates = {
+        "/CesiumGeoreference": {
+            "cesium:georeferenceOrigin:latitude": cfg.latitude_deg,
+            "cesium:georeferenceOrigin:longitude": cfg.longitude_deg,
+            "cesium:georeferenceOrigin:height": cfg.height_m,
+        },
+        "/Cesium_World_Terrain": {"cesium:ionAccessToken": cfg.ion_token},
+        "/Cesium_World_Terrain/Bing_Maps_Aerial_imagery": {"cesium:ionAccessToken": cfg.ion_token},
+        "/CesiumServers/IonOfficial": {"cesium:projectDefaultIonAccessToken": cfg.ion_token},
+    }
+    for prim_path, attrs in updates.items():
+        prim = stage.GetPrimAtPath(prim_path)
+        if not prim.IsValid():
+            _log(f"WARNING: Cesium prim not found: {prim_path}")
+            continue
+        for attr_name, value in attrs.items():
+            attr = prim.GetAttribute(attr_name)
+            if attr.IsValid():
+                attr.Set(value)
+    _log("Applied Cesium ion token and georeference settings from environment.")
+
+
 def _register_actors(world: World) -> None:
-    """Set world-frame positions on every actor prim and register with the world."""
     stage = omni.usd.get_context().get_stage()
     root = "/hades_phase_1"
 
     for group, entries in ACTOR_PRIMS.items():
-        for prim_name, (x, y, z) in entries:
+        for prim_name, (x, y, z), yaw_deg in entries:
             prim_path = f"{root}/{prim_name}"
             prim = stage.GetPrimAtPath(prim_path)
             if not prim.IsValid():
@@ -114,20 +96,32 @@ def _register_actors(world: World) -> None:
                 continue
 
             xformable = UsdGeom.Xformable(prim)
-            xformable.ClearXformOpOrder()
-            translate_op = xformable.AddTranslateOp()
+            translate_op = None
+            rotate_op = None
+            for op in xformable.GetOrderedXformOps():
+                if op.GetOpType() == UsdGeom.XformOp.TypeTranslate:
+                    translate_op = op
+                elif op.GetOpType() == UsdGeom.XformOp.TypeRotateXYZ:
+                    rotate_op = op
+
+            if translate_op is None:
+                translate_op = xformable.AddTranslateOp()
             translate_op.Set(Gf.Vec3d(x, y, z))
+            if rotate_op is None:
+                rotate_op = xformable.AddRotateXYZOp()
+            rotate_op.Set(Gf.Vec3f(0.0, 0.0, yaw_deg))
 
             if group in ("parents", "smalls", "convoy"):
                 world.scene.add(RigidPrim(prim_path=prim_path, name=prim_name))
             else:
                 world.scene.add(XFormPrim(prim_path=prim_path, name=prim_name))
 
-            _log(f"Registered {prim_name} at ({x:.1f}, {y:.1f}, {z:.1f})")
+            _log(f"Registered {prim_name} at ({x:.1f}, {y:.1f}, {z:.1f}), yaw={yaw_deg:.1f}")
 
 
 async def _run(stage_path: str) -> None:
     await _open_stage(stage_path)
+    _apply_cesium_env()
 
     world = World(stage_units_in_meters=1.0)
     await world.initialize_simulation_context_async()
@@ -135,7 +129,7 @@ async def _run(stage_path: str) -> None:
     _register_actors(world)
     await world.reset_async()
 
-    _log("Simulation running — press Ctrl+C to stop")
+    _log("Simulation running - press Ctrl+C to stop")
     app = omni.kit.app.get_app()
     while True:
         world.step(render=True)
@@ -143,12 +137,11 @@ async def _run(stage_path: str) -> None:
 
 
 def main() -> None:
-    # Skip --headless flag when parsing positional stage path
     positional = [a for a in sys.argv[1:] if not a.startswith("--")]
     stage_path = positional[0] if positional else str(Path(__file__).with_name("scene.usda"))
 
     try:
-        asyncio.ensure_future(_run(stage_path))
+        asyncio.get_event_loop().run_until_complete(_run(stage_path))
     finally:
         _sim_app.close()
 

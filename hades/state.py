@@ -101,7 +101,7 @@ class SimFrame:
     convoy: list[ConvoyState] = field(default_factory=list)
     links: list[CommsLink] = field(default_factory=list)
     events: list[OffloadEvent] = field(default_factory=list)
-    environment: str = "nvidia_jetracer_track_real_assets"
+    environment: str = "cesium_laughlin_bullhead_world_terrain"
     threats: list[ThreatState] = field(default_factory=list)
     compute_events: list[ComputeEvent] = field(default_factory=list)
 

@@ -29,6 +29,13 @@ else:
     )
 
 
+def _frame_payload() -> dict[str, Any]:
+    frame = publisher.now_frame()
+    if os.getenv("HADES_PUBLISHER") == "track2":
+        return frame.to_full_dict()
+    return frame.to_dict()
+
+
 @app.get("/healthz")
 async def healthz() -> JSONResponse:
     return JSONResponse({"ok": True, "tick_hz": config.BRIDGE.tick_hz})
@@ -36,18 +43,20 @@ async def healthz() -> JSONResponse:
 
 @app.get("/frame")
 async def frame() -> dict[str, Any]:
-    return publisher.now_frame().to_dict()
+    return _frame_payload()
 
 
 @app.websocket(config.BRIDGE.websocket_path)
 async def stream(websocket: WebSocket) -> None:
     await websocket.accept()
     delay_s = 1.0 / config.BRIDGE.tick_hz
+    next_send_s = asyncio.get_running_loop().time()
     try:
         while True:
-            payload = publisher.now_frame().to_dict()
+            payload = _frame_payload()
             await websocket.send_text(json.dumps(payload, separators=(",", ":")))
-            await asyncio.sleep(delay_s)
+            next_send_s += delay_s
+            await asyncio.sleep(max(0.0, next_send_s - asyncio.get_running_loop().time()))
     except WebSocketDisconnect:
         return
 

@@ -25,7 +25,7 @@ class CommsConfig:
 class ActorCounts:
     parent_drones: int = 2
     small_drones: int = 6
-    edge_nodes: int = 18
+    edge_nodes: int = 8
     convoy_vehicles: int = 2
 
 
@@ -42,11 +42,14 @@ class ComputeConfig:
 @dataclass(frozen=True)
 class SceneConfig:
     name: str = "hades_phase_1"
-    environment: str = "nvidia_jetracer_track_real_assets"
+    environment: str = "cesium_laughlin_bullhead_world_terrain"
     route_length_m: float = 1200.0
     road_width_m: float = 10.0
     parent_hover_altitude_m: float = 34.0
     small_hover_altitude_m: float = 18.0
+    latitude_deg: float = 35.17
+    longitude_deg: float = -114.57
+    height_m: float = 0.0
 
 
 @dataclass(frozen=True)

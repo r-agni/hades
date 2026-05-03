@@ -5,26 +5,75 @@
     upAxis = "Z"
 )
 
+def CesiumDataPrim "Cesium"
+{
+    rel cesium:selectedIonServer = </CesiumServers/IonOfficial>
+}
+
+def CesiumGeoreferencePrim "CesiumGeoreference"
+{
+    custom string hades:environment = "cesium_laughlin_bullhead_world_terrain"
+    double cesium:georeferenceOrigin:height = 0
+    double cesium:georeferenceOrigin:latitude = 35.17
+    double cesium:georeferenceOrigin:longitude = -114.57
+}
+
+def CesiumTilesetPrim "Cesium_World_Terrain"
+{
+    prepend rel cesium:georeferenceBinding = </CesiumGeoreference>
+    string cesium:ionAccessToken = ""
+    int64 cesium:ionAssetId = 1
+    rel cesium:ionServerBinding = </CesiumServers/IonOfficial>
+    uniform token cesium:sourceType = "ion"
+    prepend rel cesium:rasterOverlayBinding = </Cesium_World_Terrain/Bing_Maps_Aerial_imagery>
+
+    def CesiumIonRasterOverlayPrim "Bing_Maps_Aerial_imagery"
+    {
+        string cesium:ionAccessToken = ""
+        int64 cesium:ionAssetId = 2
+        rel cesium:ionServerBinding = </CesiumServers/IonOfficial>
+    }
+}
+
+def "CesiumServers"
+{
+    def CesiumIonServerPrim "IonOfficial"
+    {
+        string cesium:displayName = "ion.cesium.com"
+        string cesium:ionServerApiUrl = "https://api.cesium.com/"
+        int64 cesium:ionServerApplicationId = 413
+        string cesium:ionServerUrl = "https://ion.cesium.com/"
+        string cesium:projectDefaultIonAccessToken = ""
+        string cesium:projectDefaultIonAccessTokenId = ""
+    }
+}
+
+def DistantLight "Sun"
+{
+    float angle = 2.5
+    float intensity = 6500
+    double3 xformOp:rotateXYZ = (-58, 0, 38)
+    uniform token[] xformOpOrder = ["xformOp:rotateXYZ"]
+}
+
 def Xform "hades_phase_1"
 {
     def Xform "environment"
     {
-        def Xform "jetracer_track_context" (
-            prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Environments/Jetracer/Tracks/track_solid_line.usd@
-        )
+        def Xform "cesium_laughlin_bullhead_anchor"
         {
-            double3 xformOp:translate = (0, 0, -0.04)
-            double3 xformOp:scale = (42, 42, 1)
-            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+            custom string hades:source = "Cesium World Terrain + Bing Maps Aerial imagery"
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
         }
     }
 
-    # Convoy — 2 Carter robots at route start (x = -190)
+    # Convoy - 2 Carter robots at route start.
     def Xform "convoy_0" (
         prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/NVIDIA/Carter/carter_v1_physx_lidar.usd@
     )
     {
-        double3 xformOp:translate = (-190.0, -3.0, 0.8)
+        double3 xformOp:translate = (-580.0, -3.0, 0.8)
         double3 xformOp:rotateXYZ = (0, 0, 0)
         double3 xformOp:scale = (1.35, 1.35, 1.35)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
@@ -34,200 +83,240 @@ def Xform "hades_phase_1"
         prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/NVIDIA/Carter/carter_v1_physx_lidar.usd@
     )
     {
-        double3 xformOp:translate = (-204.0, 3.0, 0.8)
+        double3 xformOp:translate = (-594.0, 3.0, 0.8)
         double3 xformOp:rotateXYZ = (0, 0, 0)
         double3 xformOp:scale = (1.35, 1.35, 1.35)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
-    # Parent drones — Skydio X10D class, hovering above convoy start
+    # Parent drones - Neo11 hexcopter relay UAVs.
     def Xform "parent_0" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/IsaacSim/Quadcopter/quadcopter.usd@
+        prepend references = @../assets/drones/omnidrones/usd/neo11.usd@
     )
     {
-        double3 xformOp:translate = (-208.0, 32.0, 34.0)
+        double3 xformOp:translate = (-548.0, 54.0, 34.0)
         double3 xformOp:rotateXYZ = (0, 0, 0)
-        double3 xformOp:scale = (16.0, 16.0, 16.0)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+
+        def Xform "lidar_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
     }
 
     def Xform "parent_1" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/IsaacSim/Quadcopter/quadcopter.usd@
+        prepend references = @../assets/drones/omnidrones/usd/neo11.usd@
     )
     {
-        double3 xformOp:translate = (-172.0, -32.0, 34.0)
+        double3 xformOp:translate = (-572.0, -54.0, 34.0)
         double3 xformOp:rotateXYZ = (0, 0, 0)
-        double3 xformOp:scale = (16.0, 16.0, 16.0)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+
+        def Xform "lidar_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
     }
 
-    # Small drones — Crazyflie 2.1 class, ring around convoy start
+    # Small drones - Crazyflie CF2X Isaac-tuned scouts, not a ring formation.
     def Xform "small_0" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+        prepend references = @../assets/drones/omnidrones/usd/cf2x_isaac.usd@
     )
     {
-        double3 xformOp:translate = (-166.0, 0.0, 18.0)
-        double3 xformOp:rotateXYZ = (0, 0, 0)
-        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        double3 xformOp:translate = (-504.0, 44.0, 22.0)
+        double3 xformOp:rotateXYZ = (0, 0, 8)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
     }
 
     def Xform "small_1" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+        prepend references = @../assets/drones/omnidrones/usd/cf2x_isaac.usd@
     )
     {
-        double3 xformOp:translate = (-178.0, 20.8, 18.0)
-        double3 xformOp:rotateXYZ = (0, 0, 60)
-        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        double3 xformOp:translate = (-512.0, -40.0, 21.5)
+        double3 xformOp:rotateXYZ = (0, 0, -12)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
     }
 
     def Xform "small_2" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+        prepend references = @../assets/drones/omnidrones/usd/cf2x_isaac.usd@
     )
     {
-        double3 xformOp:translate = (-202.0, 20.8, 18.0)
-        double3 xformOp:rotateXYZ = (0, 0, 120)
-        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        double3 xformOp:translate = (-556.0, 80.0, 20.0)
+        double3 xformOp:rotateXYZ = (0, 0, 18)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
     }
 
     def Xform "small_3" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+        prepend references = @../assets/drones/omnidrones/usd/cf2x_isaac.usd@
     )
     {
-        double3 xformOp:translate = (-214.0, 0.0, 18.0)
-        double3 xformOp:rotateXYZ = (0, 0, 180)
-        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        double3 xformOp:translate = (-568.0, -76.0, 19.5)
+        double3 xformOp:rotateXYZ = (0, 0, -22)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
     }
 
     def Xform "small_4" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+        prepend references = @../assets/drones/omnidrones/usd/cf2x_isaac.usd@
     )
     {
-        double3 xformOp:translate = (-202.0, -20.8, 18.0)
-        double3 xformOp:rotateXYZ = (0, 0, 240)
-        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        double3 xformOp:translate = (-622.0, 38.0, 18.5)
+        double3 xformOp:rotateXYZ = (0, 0, 170)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
     }
 
     def Xform "small_5" (
-        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+        prepend references = @../assets/drones/omnidrones/usd/cf2x_isaac.usd@
     )
     {
-        double3 xformOp:translate = (-178.0, -20.8, 18.0)
-        double3 xformOp:rotateXYZ = (0, 0, 300)
-        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        double3 xformOp:translate = (-636.0, -32.0, 18.0)
+        double3 xformOp:rotateXYZ = (0, 0, -168)
+        double3 xformOp:scale = (1.0, 1.0, 1.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+        def Xform "imu_mount"
+        {
+            double3 xformOp:translate = (0, 0, 0)
+            uniform token[] xformOpOrder = ["xformOp:translate"]
+        }
+    }
+
+    # Edge nodes - 8 sparse Server_1U field relay deployments.
+    def Xform "edge_0" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (-560, 84, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, 78)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
     }
 
-    # Edge nodes — 18 x Server_1U along the 420 m route, alternating sides
-    def Xform "edge_0" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-190.0, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Xform "edge_1" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (-430, -132, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, -104)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
 
-    def Xform "edge_1" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-165.3, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Xform "edge_2" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (-252, 104, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, 52)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
 
-    def Xform "edge_2" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-140.6, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Xform "edge_3" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (-68, -146, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, -138)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
 
-    def Xform "edge_3" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-115.9, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Xform "edge_4" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (96, 118, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, 37)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
 
-    def Xform "edge_4" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-91.2, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Xform "edge_5" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (286, -92, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, -83)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
 
-    def Xform "edge_5" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-66.5, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Xform "edge_6" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (420, -126, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, -116)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
 
-    def Xform "edge_6" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-41.8, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Xform "edge_7" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@
+    )
+    {
+        double3 xformOp:translate = (566, 54, 1.2)
+        double3 xformOp:rotateXYZ = (0, 0, 66)
+        double3 xformOp:scale = (0.025, 0.025, 0.025)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
 
-    def Xform "edge_7" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (-17.1, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_8" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (7.6, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_9" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (32.4, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_10" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (57.1, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_11" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (81.8, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_12" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (106.5, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_13" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (131.2, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_14" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (155.9, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_15" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (180.6, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_16" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (180.6, 42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, 90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
-
-    def Xform "edge_17" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
-    { double3 xformOp:translate = (190.0, -42.0, 1.2)
-      double3 xformOp:rotateXYZ = (0, 0, -90)
-      double3 xformOp:scale = (0.01, 0.01, 0.01)
-      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+    def Camera "RecordCamera"
+    {
+        double3 xformOp:translate = (0, -520, 360)
+        double3 xformOp:rotateXYZ = (55, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+        float focalLength = 35
+        float focusDistance = 600
+        float fStop = 0
+        float horizontalAperture = 20.955
+        float verticalAperture = 11.787
+        token projection = "perspective"
+        float2 clippingRange = (0.1, 1000000000)
+    }
 }

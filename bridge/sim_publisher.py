@@ -12,6 +12,8 @@ import time
 from dataclasses import dataclass
 
 from hades import config
+from hades.layout import EDGE_DEPLOYMENTS, ROUTE_DURATION_S, ROUTE_END_X, ROUTE_START_X
+from hades.motion import DroneMotionModel, blend_pose, route_pose
 from hades.state import CommsLink, ConvoyState, DroneState, EdgeState, Pose, SimFrame, ThreatState
 
 
@@ -25,11 +27,17 @@ def _distance(a: Pose, b: Pose) -> float:
 
 @dataclass(frozen=True)
 class SyntheticWorldLayout:
-    route_start_x: float = -190.0
-    route_end_x: float = 190.0
+    route_start_x: float = ROUTE_START_X
+    route_end_x: float = ROUTE_END_X
+    route_duration_s: float = ROUTE_DURATION_S
+    loop: bool = False
     edge_y_offset_m: float = 42.0
     small_ring_radius_m: float = 24.0
     parent_y_offset_m: float = 32.0
+
+    @classmethod
+    def demo_60s(cls) -> "SyntheticWorldLayout":
+        return cls(route_start_x=ROUTE_START_X, route_end_x=ROUTE_END_X, route_duration_s=ROUTE_DURATION_S, loop=False)
 
 
 class SyntheticSimPublisher:
@@ -43,6 +51,7 @@ class SyntheticSimPublisher:
     ) -> None:
         self.layout = layout or SyntheticWorldLayout()
         self.environment = environment
+        self._motion = DroneMotionModel()
         self.started_at = time.monotonic()
 
     def now_frame(self) -> SimFrame:
@@ -51,7 +60,7 @@ class SyntheticSimPublisher:
     def frame_at(self, t: float) -> SimFrame:
         convoy_x = self._convoy_x(t)
         convoy = self._convoy(convoy_x, t)
-        drones = self._drones(convoy_x, t)
+        drones = self._drones(convoy, t)
         edges = self._edges(t)
         links = self._links(drones, edges)
         return SimFrame(
@@ -66,8 +75,10 @@ class SyntheticSimPublisher:
 
     def _convoy_x(self, t: float) -> float:
         route = self.layout.route_end_x - self.layout.route_start_x
-        # Slow loop for demos: one full route pass every 160 seconds.
-        progress = (t % 160.0) / 160.0
+        if self.layout.loop:
+            progress = (t % self.layout.route_duration_s) / self.layout.route_duration_s
+        else:
+            progress = _clamp01(t / self.layout.route_duration_s)
         return self.layout.route_start_x + route * progress
 
     def _route_progress_pct(self, x: float) -> float:
@@ -75,7 +86,7 @@ class SyntheticSimPublisher:
         return 100.0 * (x - self.layout.route_start_x) / route
 
     def _convoy(self, convoy_x: float, t: float) -> list[ConvoyState]:
-        speed_mps = (self.layout.route_end_x - self.layout.route_start_x) / 160.0
+        speed_mps = (self.layout.route_end_x - self.layout.route_start_x) / self.layout.route_duration_s
         progress = self._route_progress_pct(convoy_x)
         return [
             ConvoyState(
@@ -92,61 +103,21 @@ class SyntheticSimPublisher:
             ),
         ]
 
-    def _drones(self, convoy_x: float, t: float) -> list[DroneState]:
-        drones: list[DroneState] = []
-        hover = 0.8 * math.sin(t * 0.8)
-        parent_offsets = [(-18.0, self.layout.parent_y_offset_m), (18.0, -self.layout.parent_y_offset_m)]
-        for idx, (dx, dy) in enumerate(parent_offsets):
-            drones.append(
-                DroneState(
-                    id=f"parent_{idx}",
-                    tier="PARENT",
-                    pose=Pose(
-                        x=convoy_x + dx,
-                        y=dy,
-                        z=config.SCENE.parent_hover_altitude_m + hover,
-                        yaw=0.0,
-                    ),
-                    battery_pct=round(config.COMPUTE.parent_default_battery_pct - 0.002 * t, 2),
-                    compute_load=round(0.18 + 0.04 * math.sin(t + idx), 3),
-                    current_task="escort_overwatch",
-                )
-            )
-
-        for idx in range(config.COUNTS.small_drones):
-            angle = (2.0 * math.pi * idx / config.COUNTS.small_drones) + 0.15 * math.sin(t / 5.0)
-            drones.append(
-                DroneState(
-                    id=f"small_{idx}",
-                    tier="SMALL",
-                    pose=Pose(
-                        x=convoy_x + self.layout.small_ring_radius_m * math.cos(angle),
-                        y=self.layout.small_ring_radius_m * math.sin(angle),
-                        z=config.SCENE.small_hover_altitude_m + 0.5 * math.sin(t + idx),
-                        yaw=angle,
-                    ),
-                    battery_pct=round(config.COMPUTE.small_default_battery_pct - 0.004 * t, 2),
-                    compute_load=round(0.05 + 0.02 * math.sin(t * 0.7 + idx), 3),
-                    current_task=f"escort_quadrant_{idx}",
-                )
-            )
-        return drones
+    def _drones(self, convoy: list[ConvoyState], t: float) -> list[DroneState]:
+        return self._motion.drones_at(t=t, convoy=convoy, active_route="main", threats=[])
 
     def _edges(self, t: float) -> list[EdgeState]:
         edges: list[EdgeState] = []
-        count = config.COUNTS.edge_nodes
-        if count <= 1:
-            xs = [0.0]
-        else:
-            step = (self.layout.route_end_x - self.layout.route_start_x) / (count - 1)
-            xs = [self.layout.route_start_x + i * step for i in range(count)]
-
-        for idx, x in enumerate(xs):
-            side = -1.0 if idx % 2 else 1.0
+        for idx, placement in enumerate(EDGE_DEPLOYMENTS):
             edges.append(
                 EdgeState(
-                    id=f"edge_{idx}",
-                    pose=Pose(x=x, y=side * self.layout.edge_y_offset_m, z=1.2),
+                    id=placement.id,
+                    pose=Pose(
+                        x=placement.x,
+                        y=placement.y,
+                        z=placement.z,
+                        yaw=math.radians(placement.yaw_deg),
+                    ),
                     battery_pct=round(config.COMPUTE.edge_default_battery_pct - 0.0005 * t, 2),
                     compute_load=round(0.12 + 0.08 * (0.5 + 0.5 * math.sin(t / 8.0 + idx)), 3),
                     alive=True,
@@ -221,6 +192,7 @@ class Track2SimPublisher:
         self._router = ConvoyRouter(registry)
         self.started_at = time.monotonic()
         self._active_route: str = "main"
+        self._route_switch_t: float | None = None
 
     def now_frame(self) -> SimFrame:
         return self.frame_at(time.monotonic() - self.started_at)
@@ -233,30 +205,46 @@ class Track2SimPublisher:
 
         # Update convoy route when choke_a threats are active
         if any(th.spawn_zone == "choke_a" for th in threats):
-            self._active_route = self._router.select_route(base_frame.convoy[0], threats)
+            selected_route = self._router.select_route(base_frame.convoy[0], threats)
+            if selected_route != self._active_route:
+                self._active_route = selected_route
+                self._route_switch_t = min(t, 15.0)
 
-        convoy_states = [
-            ConvoyState(
+        convoy_states: list[ConvoyState] = []
+        for c in base_frame.convoy:
+            main_pose = route_pose("main", c.route_progress_pct, c.pose.z)
+            target_pose = route_pose(self._active_route, c.route_progress_pct, c.pose.z)
+            if self._active_route == "main":
+                routed_pose = main_pose
+            else:
+                switch_t = self._route_switch_t if self._route_switch_t is not None else 15.0
+                routed_pose = blend_pose(main_pose, target_pose, (t - switch_t) / 5.0)
+            convoy_states.append(ConvoyState(
                 id=c.id,
-                pose=c.pose,
+                pose=routed_pose,
                 speed_mps=c.speed_mps,
                 route_progress_pct=c.route_progress_pct,
                 active_route_id=self._active_route,
                 threat_ahead=any(
-                    math.sqrt((th.pose.x - c.pose.x) ** 2 + (th.pose.y - c.pose.y) ** 2) < 80.0
+                    math.sqrt((th.pose.x - routed_pose.x) ** 2 + (th.pose.y - routed_pose.y) ** 2) < 80.0
                     for th in threats
                 ),
-            )
-            for c in base_frame.convoy
-        ]
+            ))
+
+        drones = self._base._motion.drones_at(
+            t=t,
+            convoy=convoy_states,
+            active_route=self._active_route,
+            threats=threats,
+        )
 
         # Update comms topology
-        self._comms.step(base_frame.drones, base_frame.edges, convoy_states)
+        self._comms.step(drones, base_frame.edges, convoy_states)
 
         # Build interim frame for scheduler
         interim = SimFrame(
             t=t,
-            drones=base_frame.drones,
+            drones=drones,
             edges=base_frame.edges,
             convoy=convoy_states,
             links=self._comms.links(),
@@ -269,7 +257,7 @@ class Track2SimPublisher:
 
         return SimFrame(
             t=round(t, 3),
-            drones=base_frame.drones,
+            drones=drones,
             edges=base_frame.edges,
             convoy=convoy_states,
             links=self._comms.links(),
@@ -283,7 +271,53 @@ class Track2SimPublisher:
         """Reset publisher state (called by HADESEnv._reset_idx)."""
         self._spawner.reset(env_ids)
         self._active_route = "main"
+        self._route_switch_t = None
         self.started_at = time.monotonic()
+
+
+class IsaacSimDriver:
+    """Writes SimFrame actor poses back into a running Isaac Sim stage.
+
+    Must be called from within an Isaac Sim Kit process where omni.usd
+    and pxr are available. Prim paths match the names in isaac/scene.usda
+    (lowercase root names, e.g. /hades_phase_1/convoy_0).
+    """
+
+    _PRIM_PATHS: dict[str, str] = {
+        "convoy_0": "/hades_phase_1/convoy_0",
+        "convoy_1": "/hades_phase_1/convoy_1",
+        "parent_0": "/hades_phase_1/parent_0",
+        "parent_1": "/hades_phase_1/parent_1",
+        **{f"small_{i}": f"/hades_phase_1/small_{i}" for i in range(config.COUNTS.small_drones)},
+        **{f"edge_{i}": f"/hades_phase_1/edge_{i}" for i in range(config.COUNTS.edge_nodes)},
+    }
+
+    def apply(self, frame: SimFrame) -> None:
+        import omni.usd
+        from pxr import Gf, UsdGeom
+
+        stage = omni.usd.get_context().get_stage()
+        for actor_list in (frame.drones, frame.edges, frame.convoy):
+            for actor in actor_list:
+                path = self._PRIM_PATHS.get(actor.id)
+                if path is None:
+                    continue
+                prim = stage.GetPrimAtPath(path)
+                if not prim.IsValid():
+                    continue
+                xf = UsdGeom.Xformable(prim)
+                ops = {op.GetOpName(): op for op in xf.GetOrderedXformOps()}
+                pose = actor.pose
+                if "xformOp:translate" in ops:
+                    ops["xformOp:translate"].Set(Gf.Vec3d(pose.x, pose.y, pose.z))
+                if "xformOp:rotateXYZ" in ops:
+                    ops["xformOp:rotateXYZ"].Set(
+                        Gf.Vec3f(
+                            math.degrees(pose.roll),
+                            math.degrees(pose.pitch),
+                            math.degrees(pose.yaw),
+                        )
+                    )
 
 
 class IsaacSimPublisher:

@@ -65,7 +65,7 @@ class ObsBuilder:
                 obs[agent_id] = {
                     "obs": self._small_obs(
                         agent_id, pos, sensor_data, comms, positions,
-                        convoy_pos, convoy_progress, compute_events, ne,
+                        convoy_pos, convoy_progress, compute_events, threats, ne,
                     )
                 }
         return obs
@@ -109,8 +109,12 @@ class ObsBuilder:
             vec[:, base + 4] = comms.link_quality(agent_id, small_id)
         # threat grid uses threat_hist (16)
         vec[:, 42:58] = threat_hist
-        # nearest 3 edges (6 = 3 × 2: tops_free + latency)
-        # placeholder zeros — will be filled from frame edges in Track 3+
+        vec[:, 58] = _tensor_mean(sensor_data.get("parent_nav_rgb"), scale=255.0)
+        vec[:, 59] = _tensor_mean(sensor_data.get("parent_nav_depth"), scale=100.0)
+        vec[:, 60] = _tensor_mean(sensor_data.get("parent_thermal"), scale=255.0)
+        vec[:, 61] = _finite_ratio(sensor_data.get("parent_lidar"))
+        vec[:, 62] = _tensor_norm(sensor_data.get("parent_imu_acc"), scale=9.81)
+        vec[:, 63] = _tensor_norm(sensor_data.get("parent_imu_gyr"), scale=10.0)
         return vec
 
     # ------------------------------------------------------------------
@@ -122,7 +126,7 @@ class ObsBuilder:
     # ------------------------------------------------------------------
     def _small_obs(
         self, agent_id, pos, sensor_data, comms, positions,
-        convoy_pos, convoy_progress, compute_events, ne,
+        convoy_pos, convoy_progress, compute_events, threats, ne,
     ) -> torch.Tensor:
         vec = torch.zeros(ne, 32)
         x, y, z = pos
@@ -132,6 +136,13 @@ class ObsBuilder:
         # battery (1), compute_load (1) — placeholders
         vec[:, 6] = 0.9
         vec[:, 7] = 0.1
+        nearest = _nearest_threat(pos, threats)
+        if nearest is not None:
+            dx, dy, dz, conf = nearest
+            vec[:, 8] = dx / 300.0
+            vec[:, 9] = dy / 300.0
+            vec[:, 10] = dz / 50.0
+            vec[:, 11] = conf
         # nearest parent relative (3) + link_quality (1)
         best_parent = "parent_0"
         pp = positions.get(best_parent, (0.0, 0.0, 0.0))
@@ -145,6 +156,10 @@ class ObsBuilder:
         vec[:, 25] = (cy - y) / 200.0
         vec[:, 26] = convoy_progress / 100.0
         vec[:, 27] = convoy_progress / 100.0
+        vec[:, 28] = _tensor_mean(sensor_data.get("small_rgb"), scale=255.0)
+        vec[:, 29] = _tensor_norm(sensor_data.get("small_imu_acc"), scale=9.81)
+        vec[:, 30] = _tensor_norm(sensor_data.get("small_imu_gyr"), scale=10.0)
+        vec[:, 31] = sum(1 for ev in compute_events if ev.actor_id == agent_id and ev.dropped)
         return vec
 
     def _threat_histogram(self, threats, convoy_pos, ne) -> torch.Tensor:
@@ -159,3 +174,42 @@ class ObsBuilder:
             if 0 <= col < 4 and 0 <= row < 4:
                 grid[:, row * 4 + col] += 1.0 / max(1, len(threats))
         return grid
+
+
+def _tensor_mean(value, *, scale: float = 1.0) -> float:
+    if value is None or not hasattr(value, "float"):
+        return 0.0
+    tensor = value.float()
+    if tensor.numel() == 0:
+        return 0.0
+    return float(torch.nan_to_num(tensor).mean().clamp(-scale, scale) / scale)
+
+
+def _tensor_norm(value, *, scale: float = 1.0) -> float:
+    if value is None or not hasattr(value, "float"):
+        return 0.0
+    tensor = value.float()
+    if tensor.numel() == 0:
+        return 0.0
+    flat = torch.nan_to_num(tensor).reshape(-1)
+    return float(torch.linalg.vector_norm(flat).clamp(0.0, scale) / scale)
+
+
+def _finite_ratio(value) -> float:
+    if value is None or not hasattr(value, "float"):
+        return 0.0
+    tensor = value.float()
+    if tensor.numel() == 0:
+        return 0.0
+    return float(torch.isfinite(tensor).float().mean())
+
+
+def _nearest_threat(pos, threats) -> tuple[float, float, float, float] | None:
+    if not threats:
+        return None
+    x, y, z = pos
+    threat = min(
+        threats,
+        key=lambda th: math.sqrt((th.pose.x - x) ** 2 + (th.pose.y - y) ** 2 + (th.pose.z - z) ** 2),
+    )
+    return threat.pose.x - x, threat.pose.y - y, threat.pose.z - z, float(threat.confidence)

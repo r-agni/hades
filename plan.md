@@ -2,7 +2,7 @@
 
 ## Context
 
-Phase 1 (complete) built the simulation scaffold: Isaac Sim 5.1 scene with real NVIDIA assets (Carter convoy, Quadcopter parents, Crazyflie smalls, 1U server edges), a FastAPI WebSocket bridge at 10 Hz, and frozen dataclass state models. No autonomy, no control, no RL exists yet.
+Phase 1 (complete) built the simulation scaffold: Isaac Sim 5.1 scene with generated Laughlin/Bullhead map terrain plus real actor assets (Carter convoy, OmniDrones Neo11 hexcopter parents, CF2X Isaac-tuned smalls, 1U server edges), a FastAPI WebSocket bridge at 10 Hz, and frozen dataclass state models. No autonomy, no control, no RL exists yet.
 
 The goal of Tracks 2–4 is to implement the full swarm-escort-under-threat scenario entirely inside Isaac Lab — using real sensors on every actor, enforcing compute and comms constraints, training a MAPPO policy via SKRL, and running a scored demo episode. No separate visualizer layer: everything renders and trains directly in Isaac Sim 5.1.
 

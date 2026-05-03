@@ -18,6 +18,7 @@ try:
 
         # Simulation: 10 Hz physics
         sim: SimulationCfg = SimulationCfg(dt=0.1, render_interval=1)
+        decimation: int = 1
 
         # Scene: 64 parallel episodes on a single GPU
         scene: HADESSceneCfg = HADESSceneCfg(num_envs=64, env_spacing=200.0)
@@ -65,6 +66,10 @@ try:
         r_battery: float = -0.01
         r_crash: float = -50.0
 
+        require_real_assets: bool = False
+        require_real_sensors: bool = False
+        use_real_models: bool = False
+
 except ImportError:
     # Headless / test mode — provide a plain dataclass substitute
     from dataclasses import dataclass, field
@@ -73,6 +78,7 @@ except ImportError:
     class _SimCfg:
         dt: float = 0.1
         render_interval: int = 1
+        device: str = "cuda:0"
 
     @dataclass
     class _SceneCfg:
@@ -82,6 +88,7 @@ except ImportError:
     @dataclass
     class HADESEnvCfg:  # type: ignore[no-redef]
         sim: _SimCfg = field(default_factory=_SimCfg)
+        decimation: int = 1
         scene: _SceneCfg = field(default_factory=_SceneCfg)
         episode_length_s: float = 60.0
 
@@ -108,3 +115,7 @@ except ImportError:
         r_drop_penalty: float = -0.1
         r_battery: float = -0.01
         r_crash: float = -50.0
+
+        require_real_assets: bool = False
+        require_real_sensors: bool = False
+        use_real_models: bool = False

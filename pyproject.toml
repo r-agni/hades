@@ -12,6 +12,10 @@ dependencies = [
     "filterpy>=1.4",
     "networkx>=3.2",
     "scikit-image>=0.22",
+    "requests>=2.31",
+    "pillow>=10.0",
+    "imageio>=2.34",
+    "imageio-ffmpeg>=0.4",
 ]
 
 [project.optional-dependencies]

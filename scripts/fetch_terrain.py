@@ -1,17 +1,16 @@
-"""Fetch satellite imagery for the HADES scene location and write terrain assets.
+"""Fetch satellite imagery for the HADES map-derived Isaac terrain.
 
-Location: Nevada Route 375, Sand Spring Valley (37.6530°N, 115.7440°W)
-  - Dead-straight desert highway, flat valley floor, ~420m AOI
+Default location: Laughlin/Bullhead City corridor, AZ/NV
+  - Center: 35.1700, -114.5700
+  - AOI: 1500 m x 1500 m
+  - Zoom: 17
 
-Outputs (written to assets/terrain/):
-  satellite.png   — stitched satellite image covering the 420m AOI
-  satellite.json  — metadata: center, bbox, pixels-per-meter, heading
-  road_mask.png   — greyscale mask isolating the road stripe (for USD material)
+Outputs in assets/terrain/:
+  satellite.png   - stitched satellite image covering the AOI
+  satellite.json  - metadata used by build_terrain_usd.py
+  road_mask.png   - simple road-like pixel mask for diagnostics
 
-Usage:
-    python scripts/fetch_terrain.py
-
-Requires GOOGLE_MAPS_API_KEY in .env or environment.
+Requires GOOGLE_MAPS_API_KEY in .env or the environment.
 """
 
 from __future__ import annotations
@@ -22,14 +21,23 @@ import os
 import sys
 from pathlib import Path
 
-# Load .env if present
-_env = Path(__file__).parents[1] / ".env"
-if _env.exists():
-    for line in _env.read_text().splitlines():
+
+ROOT = Path(__file__).parents[1]
+OUT_DIR = ROOT / "assets" / "terrain"
+
+
+def _load_dotenv() -> None:
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
-            k, _, v = line.partition("=")
-            os.environ.setdefault(k.strip(), v.strip())
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip())
+
+
+_load_dotenv()
 
 try:
     import requests
@@ -38,101 +46,86 @@ except ImportError:
     print("Missing deps. Run: pip install requests pillow")
     sys.exit(1)
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
 
 API_KEY = os.environ["GOOGLE_MAPS_API_KEY"]
-CENTER_LAT = float(os.getenv("HADES_SCENE_LAT", "37.6530"))
-CENTER_LON = float(os.getenv("HADES_SCENE_LON", "-115.7440"))
-HEADING_DEG = float(os.getenv("HADES_SCENE_HEADING_DEG", "315"))
-
-# 420m AOI — fetch slightly larger for margin
-AOI_M = 520
-ZOOM = 18          # ~0.6 m/px at this latitude
-TILE_SIZE = 640    # Google Static Maps max (with high-dpi would be 1280)
-SCALE = 2          # retina, doubles effective resolution to 1280×1280 per tile
-
-OUT_DIR = Path(__file__).parents[1] / "assets" / "terrain"
+CENTER_LAT = float(os.getenv("HADES_SCENE_LAT", "35.1700"))
+CENTER_LON = float(os.getenv("HADES_SCENE_LON", "-114.5700"))
+HEADING_DEG = float(os.getenv("HADES_SCENE_HEADING_DEG", "90"))
+AOI_M = int(os.getenv("HADES_SCENE_AOI_M", "1500"))
+ZOOM = int(os.getenv("HADES_SCENE_ZOOM", "17"))
+TILE_SIZE = 640
+SCALE = 2
 
 
-# ---------------------------------------------------------------------------
-# Geo helpers
-# ---------------------------------------------------------------------------
-
-def meters_to_deg_lat(m: float) -> float:
-    return m / 111_000.0
+def meters_to_deg_lat(meters: float) -> float:
+    return meters / 111_000.0
 
 
-def meters_to_deg_lon(m: float, lat: float) -> float:
-    return m / (111_000.0 * math.cos(math.radians(lat)))
+def meters_to_deg_lon(meters: float, lat: float) -> float:
+    return meters / (111_000.0 * math.cos(math.radians(lat)))
 
 
-def latlon_to_tile(lat: float, lon: float, zoom: int) -> tuple[float, float]:
-    n = 2 ** zoom
-    x = (lon + 180.0) / 360.0 * n
-    lat_r = math.radians(lat)
-    y = (1.0 - math.log(math.tan(lat_r) + 1.0 / math.cos(lat_r)) / math.pi) / 2.0 * n
-    return x, y
-
-
-# ---------------------------------------------------------------------------
-# Fetch
-# ---------------------------------------------------------------------------
-
-def fetch_static_map(lat: float, lon: float, zoom: int, size: int, scale: int, maptype: str = "satellite") -> Image.Image:
-    url = "https://maps.googleapis.com/maps/api/staticmap"
-    params = {
-        "center": f"{lat},{lon}",
-        "zoom": zoom,
-        "size": f"{size}x{size}",
-        "scale": scale,
-        "maptype": maptype,
-        "key": API_KEY,
-    }
-    r = requests.get(url, params=params, timeout=30)
-    r.raise_for_status()
+def fetch_static_map(
+    lat: float,
+    lon: float,
+    zoom: int,
+    size: int,
+    scale: int,
+    maptype: str = "satellite",
+) -> Image.Image:
+    response = requests.get(
+        "https://maps.googleapis.com/maps/api/staticmap",
+        params={
+            "center": f"{lat},{lon}",
+            "zoom": zoom,
+            "size": f"{size}x{size}",
+            "scale": scale,
+            "maptype": maptype,
+            "key": API_KEY,
+        },
+        timeout=30,
+    )
+    response.raise_for_status()
     from io import BytesIO
-    return Image.open(BytesIO(r.content)).convert("RGB")
+
+    return Image.open(BytesIO(response.content)).convert("RGB")
 
 
 def fetch_tiled_mosaic(lat: float, lon: float, aoi_m: float, zoom: int) -> tuple[Image.Image, dict]:
-    """Fetch a 3×3 grid of tiles centred on lat/lon and crop to aoi_m × aoi_m."""
-    # Pixels per meter at this zoom/lat
-    earth_circ = 40_075_016.686
-    ppm = (earth_circ * math.cos(math.radians(lat))) / (256 * 2 ** zoom)
-    tile_m = TILE_SIZE * ppm  # metres covered by one 640px tile
+    """Fetch a tile grid centered on lat/lon and crop to the requested AOI."""
+    earth_circ_m = 40_075_016.686
+    meters_per_px = earth_circ_m * math.cos(math.radians(lat)) / (256 * 2**zoom)
+    tile_m = TILE_SIZE * meters_per_px
 
-    # Number of tiles needed each side
     tiles_needed = math.ceil(aoi_m / tile_m) + 1
     half = tiles_needed // 2
-
-    # Build mosaic
-    eff_size = TILE_SIZE * SCALE
     mosaic_tiles = tiles_needed * 2 + 1
-    mosaic = Image.new("RGB", (mosaic_tiles * eff_size, mosaic_tiles * eff_size))
+    effective_tile_px = TILE_SIZE * SCALE
+    mosaic = Image.new("RGB", (mosaic_tiles * effective_tile_px, mosaic_tiles * effective_tile_px))
 
     deg_lat_per_tile = meters_to_deg_lat(tile_m)
     deg_lon_per_tile = meters_to_deg_lon(tile_m, lat)
 
-    print(f"Fetching {mosaic_tiles}×{mosaic_tiles} tile grid ({ppm:.3f} m/px, tile={tile_m:.0f}m)…")
+    print(
+        f"Fetching {mosaic_tiles}x{mosaic_tiles} tile grid "
+        f"({meters_per_px:.3f} m/px, tile={tile_m:.0f} m)..."
+    )
 
     for row in range(-half, half + 1):
         for col in range(-half, half + 1):
-            tlat = lat + row * deg_lat_per_tile
-            tlon = lon + col * deg_lon_per_tile
-            img = fetch_static_map(tlat, tlon, zoom, TILE_SIZE, SCALE)
-            px = (col + half) * eff_size
-            py = (-row + half) * eff_size  # row increases south, y increases down
-            mosaic.paste(img, (px, py))
-            print(f"  tile ({row:+d},{col:+d}) at ({tlat:.5f},{tlon:.5f})")
+            tile_lat = lat + row * deg_lat_per_tile
+            tile_lon = lon + col * deg_lon_per_tile
+            image = fetch_static_map(tile_lat, tile_lon, zoom, TILE_SIZE, SCALE)
+            x_px = (col + half) * effective_tile_px
+            y_px = (-row + half) * effective_tile_px
+            mosaic.paste(image, (x_px, y_px))
+            print(f"  tile ({row:+d},{col:+d}) at ({tile_lat:.5f},{tile_lon:.5f})")
 
-    # Crop to AOI
-    aoi_px = int(aoi_m / ppm * SCALE)
-    cx = mosaic.width // 2
-    cy = mosaic.height // 2
+    aoi_px = int(aoi_m / meters_per_px * SCALE)
+    center_x = mosaic.width // 2
+    center_y = mosaic.height // 2
     half_px = aoi_px // 2
-    cropped = mosaic.crop((cx - half_px, cy - half_px, cx + half_px, cy + half_px))
+    cropped = mosaic.crop((center_x - half_px, center_y - half_px, center_x + half_px, center_y + half_px))
 
     meta = {
         "center_lat": lat,
@@ -140,7 +133,8 @@ def fetch_tiled_mosaic(lat: float, lon: float, aoi_m: float, zoom: int) -> tuple
         "heading_deg": HEADING_DEG,
         "aoi_m": aoi_m,
         "zoom": zoom,
-        "pixels_per_meter": round(ppm * SCALE, 4),
+        "meters_per_pixel": round(meters_per_px / SCALE, 4),
+        "pixels_per_meter": round(SCALE / meters_per_px, 4),
         "image_px": aoi_px,
         "bbox": {
             "north": lat + meters_to_deg_lat(aoi_m / 2),
@@ -153,43 +147,37 @@ def fetch_tiled_mosaic(lat: float, lon: float, aoi_m: float, zoom: int) -> tuple
 
 
 def make_road_mask(satellite: Image.Image) -> Image.Image:
-    """Simple luminance + edge mask to isolate the dark road stripe."""
     import numpy as np
+
     arr = np.array(satellite).astype(float)
-    # Road is dark grey — low luminance, low saturation
     lum = 0.299 * arr[:, :, 0] + 0.587 * arr[:, :, 1] + 0.114 * arr[:, :, 2]
     sat = arr.max(axis=2) - arr.min(axis=2)
-    road = ((lum < 90) & (sat < 30)).astype("uint8") * 255
-    mask = Image.fromarray(road, mode="L").filter(ImageFilter.MedianFilter(5))
-    return mask
+    road = ((lum < 105) & (sat < 45)).astype("uint8") * 255
+    return Image.fromarray(road).filter(ImageFilter.MedianFilter(5))
 
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    print(f"Center: {CENTER_LAT}°N, {CENTER_LON}°W  (Nevada Route 375)")
+    print(f"Center: {CENTER_LAT}, {CENTER_LON} (Laughlin/Bullhead corridor)")
     satellite, meta = fetch_tiled_mosaic(CENTER_LAT, CENTER_LON, AOI_M, ZOOM)
 
     sat_path = OUT_DIR / "satellite.png"
     satellite.save(sat_path, "PNG")
-    print(f"Saved satellite image → {sat_path} ({satellite.width}×{satellite.height}px)")
+    print(f"Saved satellite image -> {sat_path} ({satellite.width}x{satellite.height}px)")
 
     meta_path = OUT_DIR / "satellite.json"
-    meta_path.write_text(json.dumps(meta, indent=2))
-    print(f"Saved metadata → {meta_path}")
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    print(f"Saved metadata -> {meta_path}")
 
     try:
-        import numpy  # noqa: F401
         mask = make_road_mask(satellite)
+    except ImportError:
+        print("numpy not available - skipping road mask")
+    else:
         mask_path = OUT_DIR / "road_mask.png"
         mask.save(mask_path, "PNG")
-        print(f"Saved road mask → {mask_path}")
-    except ImportError:
-        print("numpy not available — skipping road mask (pip install numpy)")
+        print(f"Saved road mask -> {mask_path}")
 
     print("\nDone. Next: run scripts/build_terrain_usd.py to generate the USD ground plane.")
 

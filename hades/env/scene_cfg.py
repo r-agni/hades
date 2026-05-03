@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -11,22 +13,33 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 @configclass
 class HADESSceneCfg(InteractiveSceneCfg):
-    """Scene config: Laughlin/Bullhead terrain + all drone sensors.
+    """Scene config: Cesium outdoor stage + all drone sensors.
 
     Edge nodes and convoy have no sensors — they are receive-only actors.
     """
 
     # ------------------------------------------------------------------
-    # Terrain
+    # Physics-only ground. Cesium terrain is authored in scene.usda.
     # ------------------------------------------------------------------
     terrain: TerrainImporterCfg = TerrainImporterCfg(
         prim_path="/World/ground",
-        terrain_type="usd",
-        usd_path="assets/terrain/terrain.usda",
+        terrain_type="plane",
         collision_group=-1,
         debug_vis=False,
+    )
+
+    # Real HADES actor/environment hierarchy. This imports the checked-in
+    # stage with Cesium World Terrain, Carter convoy, Neo11 hexcopter parents,
+    # CF2X Isaac-tuned smalls, and passive 1U edge servers.
+    hades_phase_1: AssetBaseCfg = AssetBaseCfg(
+        prim_path="{ENV_REGEX_NS}/hades_phase_1",
+        spawn=sim_utils.UsdFileCfg(usd_path=str(_REPO_ROOT / "isaac" / "scene.usda")),
+        collision_group=0,
     )
 
     # ------------------------------------------------------------------
@@ -55,20 +68,21 @@ class HADESSceneCfg(InteractiveSceneCfg):
     )
 
     parent_lidar: RayCasterCfg = RayCasterCfg(
-        prim_path="{ENV_REGEX_NS}/hades_phase_1/parent_.*/lidar",
+        prim_path="{ENV_REGEX_NS}/hades_phase_1/parent_.*/base_link",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
         attach_yaw_only=True,
         pattern_cfg=patterns.LidarPatternCfg(
             channels=32,
             vertical_fov_range=(-20.0, 20.0),
+            horizontal_fov_range=(-180.0, 180.0),
             horizontal_res=1.0,
         ),
         max_distance=100.0,
-        mesh_prim_paths=["{ENV_REGEX_NS}/hades_phase_1/terrain"],
+        mesh_prim_paths=["/World/ground"],
     )
 
     parent_imu: ImuCfg = ImuCfg(
-        prim_path="{ENV_REGEX_NS}/hades_phase_1/parent_.*/imu",
+        prim_path="{ENV_REGEX_NS}/hades_phase_1/parent_.*/base_link",
         update_period=0.01,
     )
 
@@ -87,7 +101,7 @@ class HADESSceneCfg(InteractiveSceneCfg):
     )
 
     small_imu: ImuCfg = ImuCfg(
-        prim_path="{ENV_REGEX_NS}/hades_phase_1/small_.*/imu",
+        prim_path="{ENV_REGEX_NS}/hades_phase_1/small_.*/base_link",
         update_period=0.01,
     )
 

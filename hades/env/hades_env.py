@@ -37,6 +37,10 @@ class HADESEnv(DirectMARLEnv):
     cfg: HADESEnvCfg
 
     def __init__(self, cfg: HADESEnvCfg, **kwargs) -> None:
+        self._publisher = None
+        self._last_sensor_data: dict[str, Any] = {}
+        self._validated_asset_root: str | None = None
+
         super().__init__(cfg, **kwargs)
 
         self._obs_builder = ObsBuilder(cfg)
@@ -44,7 +48,6 @@ class HADESEnv(DirectMARLEnv):
         self._action_exec = ActionExecutor(cfg)
 
         # Runtime state
-        self._publisher = None          # set in _setup_scene
         self._prev_frame: SimFrame | None = None
         self._curr_frame: SimFrame | None = None
         self._sim_t: float = 0.0
@@ -65,13 +68,18 @@ class HADESEnv(DirectMARLEnv):
             return
 
         # Import here to avoid circular / missing deps at module load
-        from bridge.sim_publisher import Track2SimPublisher
-        self._publisher = Track2SimPublisher(stub=True)
+        from bridge.sim_publisher import SyntheticWorldLayout, Track2SimPublisher
+        self._publisher = Track2SimPublisher(
+            layout=SyntheticWorldLayout.demo_60s(),
+            stub=not getattr(self.cfg, "use_real_models", False),
+        )
 
         # Isaac Lab will automatically register scene assets from HADESSceneCfg;
         # we only need to add terrain and clone to all envs.
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=[])
+        if getattr(self.cfg, "require_real_assets", False):
+            self.validate_real_runtime(require_sensors=False)
 
     def _pre_physics_step(self, actions: dict[str, torch.Tensor]) -> None:
         """Store actions; they are applied in _apply_action."""
@@ -109,8 +117,13 @@ class HADESEnv(DirectMARLEnv):
         comms = CommsGraph()
         comms.step(frame.drones, frame.edges, frame.convoy)
 
+        sensor_data = self._collect_sensor_data()
+        if getattr(self.cfg, "require_real_sensors", False):
+            from hades.env.validation import validate_sensor_payload
+            validate_sensor_payload(sensor_data)
+
         return self._obs_builder.build(
-            sensor_data={},
+            sensor_data=sensor_data,
             comms=comms,
             compute_events=frame.compute_events,
             positions=positions,
@@ -133,6 +146,14 @@ class HADESEnv(DirectMARLEnv):
             actions=getattr(self, "_last_actions", {}),
             convoy_hit=self._convoy_hit,
             convoy_done=self._convoy_done,
+        )
+
+    def _get_states(self) -> torch.Tensor:
+        """Return centralized state as concatenated per-agent observations."""
+        obs = self._get_observations()
+        return torch.cat(
+            [obs[aid]["obs"].reshape(self.num_envs, -1) for aid in self.cfg.possible_agents],
+            dim=-1,
         )
 
     def _get_dones(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
@@ -178,3 +199,67 @@ class HADESEnv(DirectMARLEnv):
 
         if self._publisher is not None:
             self._publisher.reset(env_ids)
+
+    def validate_real_runtime(self, *, require_sensors: bool | None = None) -> dict[str, Any]:
+        """Fail fast if the real Isaac assets or sensor tensors are unavailable."""
+        if not _ISAAC_AVAILABLE:
+            raise RuntimeError("Isaac Lab is not available; real HADES runtime cannot be validated")
+
+        from hades.env.validation import validate_sensor_payload, validate_stage_assets
+
+        import omni.usd
+
+        stage = omni.usd.get_context().get_stage()
+        env_root = f"{self.scene.env_ns}/env_0/hades_phase_1"
+        self._validated_asset_root = validate_stage_assets(
+            stage,
+            candidate_roots=(env_root, "/hades_phase_1"),
+        )
+
+        sensor_data = self._collect_sensor_data()
+        if require_sensors is None:
+            require_sensors = getattr(self.cfg, "require_real_sensors", False)
+        if require_sensors:
+            validate_sensor_payload(sensor_data)
+
+        return {
+            "asset_root": self._validated_asset_root,
+            "sensor_keys": sorted(sensor_data.keys()),
+        }
+
+    def _collect_sensor_data(self) -> dict[str, Any]:
+        if not _ISAAC_AVAILABLE or not hasattr(self, "scene"):
+            self._last_sensor_data = {}
+            return {}
+
+        sensors = getattr(self.scene, "sensors", {})
+        sensor_data: dict[str, Any] = {}
+
+        def _sensor(name: str) -> Any:
+            return sensors.get(name) if isinstance(sensors, dict) else None
+
+        def _camera_output(sensor_name: str, output_name: str) -> Any:
+            sensor = _sensor(sensor_name)
+            output = getattr(getattr(sensor, "data", None), "output", None)
+            if isinstance(output, dict):
+                return output.get(output_name)
+            return None
+
+        def _data_attr(sensor_name: str, attr: str) -> Any:
+            sensor = _sensor(sensor_name)
+            return getattr(getattr(sensor, "data", None), attr, None)
+
+        mappings = {
+            "parent_nav_rgb": _camera_output("parent_nav_cam", "rgb"),
+            "parent_nav_depth": _camera_output("parent_nav_cam", "distance_to_camera"),
+            "parent_thermal": _camera_output("parent_thermal", "rgb"),
+            "parent_lidar": _data_attr("parent_lidar", "ray_hits_w"),
+            "parent_imu_acc": _data_attr("parent_imu", "lin_acc_b"),
+            "parent_imu_gyr": _data_attr("parent_imu", "ang_vel_b"),
+            "small_rgb": _camera_output("small_cam", "rgb"),
+            "small_imu_acc": _data_attr("small_imu", "lin_acc_b"),
+            "small_imu_gyr": _data_attr("small_imu", "ang_vel_b"),
+        }
+        sensor_data.update({key: value for key, value in mappings.items() if value is not None})
+        self._last_sensor_data = sensor_data
+        return sensor_data
