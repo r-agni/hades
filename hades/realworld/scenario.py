@@ -17,6 +17,14 @@ from hades.realworld.geo import (
 )
 from hades.realworld.google import GoogleMapsClient, GoogleMapsError, GoogleRoute
 from hades.realworld.capabilities import PARENT_CAPABILITY
+from hades.realworld.context import (
+    DerivedOnlyContextProvider,
+    RealWorldContextClient,
+    RealWorldContextProvider,
+    RouteContext,
+    RouteScore,
+    score_route,
+)
 from hades.realworld.optimizer import (
     EdgeAnalysis,
     EdgeRecommendation,
@@ -30,7 +38,7 @@ from hades.realworld.publisher import RealWorldSimPublisher
 
 DEFAULT_ORIGIN = "Maidan Nezalezhnosti, Kyiv, Ukraine"
 DEFAULT_DESTINATION = "National Botanical Garden, Kyiv, Ukraine"
-DEFAULT_EDGE_COUNT = 18
+DEFAULT_EDGE_COUNT = 6
 DEFAULT_WIFI_RADIUS_M = 150.0
 DEFAULT_SEARCH_BUFFER_M = 600.0
 REALWORLD_PARENT_DRONES = 4
@@ -51,6 +59,7 @@ class RerouteProposal:
     connectivity_score: float
     sensor_coverage_score: float
     score: float
+    route_score: RouteScore
     reasons: tuple[str, ...]
 
     def to_dict(self) -> dict[str, object]:
@@ -64,6 +73,7 @@ class RerouteProposal:
             "connectivity_score": round(self.connectivity_score, 3),
             "sensor_coverage_score": round(self.sensor_coverage_score, 3),
             "score": round(self.score, 1),
+            "route_score": self.route_score.to_dict(),
             "reasons": list(self.reasons),
         }
 
@@ -81,6 +91,7 @@ class RouteAnalysisBundle:
     candidate_roads: list[Any]
     route_samples: list[Any]
     analysis: EdgeAnalysis
+    route_context: RouteContext
 
 
 @dataclass
@@ -104,8 +115,10 @@ class RealWorldScenario:
     candidate_roads: list[Any]
     route_samples: list[Any]
     analysis: EdgeAnalysis
+    route_context: RouteContext
     publisher: RealWorldSimPublisher
     edge_statuses: dict[str, EdgeStatus] = field(default_factory=dict)
+    rejected_zone_ids: set[str] = field(default_factory=set)
     started: bool = False
     reroute_proposals: list[RerouteProposal] = field(default_factory=list)
     applied_reroute_id: str | None = None
@@ -128,6 +141,12 @@ class RealWorldScenario:
         return len(self.approved_stationary_edge_ids) >= self.min_required_stationary_edges
 
     def to_dict(self) -> dict[str, object]:
+        active_support = _route_edge_support_scores(
+            self.route_points,
+            _active_stationary_edges(self),
+            self.wifi_radius_m,
+        )
+        route_score = self._route_score(active_support)
         return {
             "scenario_id": self.id,
             "origin": {"label": self.origin_label, **self.origin.to_dict()},
@@ -138,7 +157,7 @@ class RealWorldScenario:
                 "search_buffer_m": self.search_buffer_m,
                 "parent_drones": REALWORLD_PARENT_DRONES,
                 "small_drones": REALWORLD_SMALL_DRONES,
-                "traffic_layer_available": False,
+                "traffic_layer_available": self.route_context.traffic.available,
             },
             "preflight": {
                 "started": self.started,
@@ -158,6 +177,10 @@ class RealWorldScenario:
             "analysis": {
                 **self.analysis.to_dict(),
                 "edges": self._edge_dicts(),
+                "candidate_zones": self._candidate_zone_dicts(),
+                "data_sources": self.route_context.data_sources_dict(),
+                "live_conditions": self.route_context.to_live_conditions_dict(),
+                "route_score": route_score.to_dict(),
                 "attack_vectors": self.publisher.attack_vectors,
                 "reroute_proposals": [proposal.to_dict() for proposal in self.reroute_proposals],
             },
@@ -181,10 +204,51 @@ class RealWorldScenario:
             result.append(payload)
         return result
 
+    def _candidate_zone_dicts(self) -> list[dict[str, object]]:
+        selected_statuses = dict(self.edge_statuses)
+        zones: list[dict[str, object]] = []
+        for zone in self.analysis.candidate_zones:
+            status = "candidate"
+            if zone.id in self.rejected_zone_ids or selected_statuses.get(zone.id) == "rejected":
+                status = "rejected"
+            elif selected_statuses.get(zone.id) in {"approved", "moved", "pending"}:
+                status = selected_statuses[zone.id]
+            elif zone.selected:
+                status = "pending"
+            payload = zone.to_dict()
+            payload.update({"status": status, "approved": status in {"approved", "moved"}})
+            zones.append(payload)
+        return zones
+
+    def _route_score(self, active_support: dict[str, float]) -> RouteScore:
+        return score_route(
+            route=GoogleRoute(
+                points=self.route_points,
+                distance_m=self.route_distance_m,
+                duration_s=self.route_duration_s,
+                encoded_polyline=self.encoded_polyline,
+            ),
+            context=self.route_context,
+            analysis=self.analysis,
+            active_edge_support=active_support,
+            synthetic_risk_score=_route_risk_score(self.route_points, self.publisher.attack_vectors),
+        )
+
 
 class RealWorldScenarioService:
-    def __init__(self, google_client: GoogleMapsClient) -> None:
+    def __init__(
+        self,
+        google_client: GoogleMapsClient,
+        context_provider: RealWorldContextProvider | None = None,
+    ) -> None:
         self._google = google_client
+        if context_provider is None:
+            context_provider = (
+                RealWorldContextClient()
+                if isinstance(google_client, GoogleMapsClient)
+                else DerivedOnlyContextProvider()
+            )
+        self._context = context_provider
         self._scenarios: dict[str, RealWorldScenario] = {}
 
     def get(self, scenario_id: str) -> RealWorldScenario:
@@ -248,6 +312,12 @@ class RealWorldScenarioService:
         rejected_edge_ids: list[str] | None = None,
     ) -> RealWorldScenario:
         scenario = self.get(scenario_id)
+        rejected_ids = set(scenario.rejected_zone_ids)
+        rejected_ids.update(rejected_edge_ids or [])
+        for edge_id in approved_edge_ids or []:
+            rejected_ids.discard(edge_id)
+        for manual in manual_edges:
+            rejected_ids.discard(manual.id)
         analysis = optimize_edges(
             scenario.route_samples,
             scenario.candidate_points,
@@ -256,11 +326,13 @@ class RealWorldScenarioService:
             edge_count=scenario.edge_count,
             wifi_radius_m=scenario.wifi_radius_m,
             manual_edges=manual_edges,
+            rejected_zone_ids=rejected_ids,
         )
         scenario.analysis = analysis
         next_statuses: dict[str, EdgeStatus] = {
             edge.id: scenario.edge_statuses.get(edge.id, "pending")
             for edge in analysis.edges
+            if edge.id not in rejected_ids
         }
         for manual in manual_edges:
             if manual.id in next_statuses:
@@ -268,10 +340,8 @@ class RealWorldScenarioService:
         for edge_id in approved_edge_ids or []:
             if edge_id in next_statuses:
                 next_statuses[edge_id] = "approved"
-        for edge_id in rejected_edge_ids or []:
-            if edge_id in next_statuses:
-                next_statuses[edge_id] = "rejected"
         scenario.edge_statuses = next_statuses
+        scenario.rejected_zone_ids = rejected_ids
         self._sync_publisher(scenario)
         return scenario
 
@@ -295,19 +365,21 @@ class RealWorldScenarioService:
         current_encoded = None if scenario.started else scenario.encoded_polyline
         active_stationary_edges = _active_stationary_edges(scenario)
         baseline_distance_m = max(1.0, routes[0].distance_m if routes else scenario.route_distance_m)
+        baseline_duration_s = max(1.0, routes[0].duration_s if routes else scenario.route_duration_s)
         for idx, route in enumerate(routes):
             if route.encoded_polyline == current_encoded:
                 continue
             risk = _route_risk_score(route.points, scenario.publisher.attack_vectors)
-            distance_penalty = route.distance_m / baseline_distance_m
             support = _route_edge_support_scores(route.points, active_stationary_edges, scenario.wifi_radius_m)
-            score = (
-                100.0
-                - risk * 55.0
-                - distance_penalty * 24.0
-                + support["edge_coverage_score"] * 28.0
-                + support["connectivity_score"] * 18.0
-                + support["sensor_coverage_score"] * 14.0
+            route_context = await self._context_for_route(route)
+            route_score = score_route(
+                route=route,
+                context=route_context,
+                analysis=scenario.analysis,
+                active_edge_support=support,
+                synthetic_risk_score=risk,
+                baseline_distance_m=baseline_distance_m,
+                baseline_duration_s=baseline_duration_s,
             )
             proposals.append(
                 RerouteProposal(
@@ -320,9 +392,10 @@ class RealWorldScenarioService:
                     edge_coverage_score=support["edge_coverage_score"],
                     connectivity_score=support["connectivity_score"],
                     sensor_coverage_score=support["sensor_coverage_score"],
-                    score=score,
+                    score=route_score.overall,
+                    route_score=route_score,
                     reasons=(
-                        f"Synthetic risk exposure {risk:.2f}",
+                        route_score.summary,
                         (
                             f"Live reroute starts {live_anchor['route_progress_pct']:.1f}% along the active route"
                             if live_anchor is not None
@@ -331,6 +404,7 @@ class RealWorldScenarioService:
                         f"Distance {route.distance_m:.0f} m",
                         f"Approved edge coverage {support['edge_coverage_score'] * 100.0:.0f}%",
                         f"Parent-edge connectivity {support['connectivity_score'] * 100.0:.0f}%",
+                        f"Synthetic scenario exposure {risk:.2f} (demo object only)",
                         "Auto-applies after warning while keeping the live stream running",
                     ),
                 )
@@ -363,6 +437,7 @@ class RealWorldScenarioService:
             edge.id: "moved" if edge.id in preserved_ids else "pending"
             for edge in scenario.analysis.edges
         }
+        scenario.rejected_zone_ids = set()
         scenario.applied_reroute_id = proposal.id
         scenario.reroute_proposals = []
         scenario.publisher.update_route(
@@ -404,6 +479,11 @@ class RealWorldScenarioService:
             wifi_radius_m=wifi_radius_m,
             manual_edges=manual_edges,
         )
+        route_context = await self._context.analyze(
+            route=route,
+            route_sample_points=route_sample_points,
+            route_elevations=route_elevations,
+        )
         return RouteAnalysisBundle(
             route_points=route.points,
             route_sample_points=route_sample_points,
@@ -416,6 +496,16 @@ class RealWorldScenarioService:
             candidate_roads=candidate_roads,
             route_samples=route_samples,
             analysis=analysis,
+            route_context=route_context,
+        )
+
+    async def _context_for_route(self, route: GoogleRoute) -> RouteContext:
+        route_sample_points = densify_route(route.points, spacing_m=95.0, max_points=180)
+        route_elevations = await self._google.elevations(route_sample_points)
+        return await self._context.analyze(
+            route=route,
+            route_sample_points=route_sample_points,
+            route_elevations=route_elevations,
         )
 
     async def _resolve_location(self, raw: Any) -> tuple[str, LatLng]:

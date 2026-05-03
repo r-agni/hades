@@ -35,6 +35,11 @@ enabled later, configure `HADES_OPENAI_ENABLED=1` and keep `OPENAI_MODEL` on a
 lightweight model such as `gpt-4.1-mini` unless a larger model is explicitly
 needed.
 
+The real-world visualizer can enrich Google route/elevation data with no-key
+public context from Open-Meteo and bounded OpenStreetMap/Overpass queries. Set
+`HADES_REALWORLD_PUBLIC_CONTEXT=0` to disable those optional calls; unavailable
+sources are shown in the UI rather than failing scenario creation.
+
 ## Layout
 
 - `hades/config.py` and `hades/state.py` define shared constants and the stable

@@ -21,6 +21,8 @@ class GoogleRoute:
     distance_m: float
     duration_s: float
     encoded_polyline: str
+    static_duration_s: float | None = None
+    speed_reading_intervals: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -82,6 +84,7 @@ class GoogleMapsClient:
             "travelMode": "DRIVE",
             "routingPreference": "TRAFFIC_AWARE",
             "computeAlternativeRoutes": alternatives,
+            "extraComputations": ["TRAFFIC_ON_POLYLINE"],
             "languageCode": "en-US",
             "units": "METRIC",
         }
@@ -90,7 +93,11 @@ class GoogleMapsClient:
             json=body,
             headers={
                 "X-Goog-Api-Key": self.api_key,
-                "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+                "X-Goog-FieldMask": (
+                    "routes.duration,routes.staticDuration,routes.distanceMeters,"
+                    "routes.polyline.encodedPolyline,"
+                    "routes.legs.travelAdvisory.speedReadingIntervals"
+                ),
             },
         )
         routes = data.get("routes") or []
@@ -197,11 +204,20 @@ class GoogleMapsClient:
         if not encoded:
             raise GoogleMapsError("Routes API returned no polyline")
         duration_raw = str(route.get("duration", "0s")).rstrip("s")
+        static_duration_raw = str(route.get("staticDuration", "")).rstrip("s")
+        speed_intervals: list[dict[str, object]] = []
+        for leg in route.get("legs", []) or []:
+            advisory = leg.get("travelAdvisory") or {}
+            for interval in advisory.get("speedReadingIntervals", []) or []:
+                if isinstance(interval, dict):
+                    speed_intervals.append(dict(interval))
         return GoogleRoute(
             points=decode_polyline(encoded),
             distance_m=float(route.get("distanceMeters", 0.0)),
             duration_s=float(duration_raw or 0.0),
             encoded_polyline=encoded,
+            static_duration_s=float(static_duration_raw) if static_duration_raw else None,
+            speed_reading_intervals=tuple(speed_intervals),
         )
 
 

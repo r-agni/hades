@@ -85,6 +85,7 @@ async def realworld_config() -> dict[str, object]:
         "default_search_buffer_m": DEFAULT_SEARCH_BUFFER_M,
         "openai_enabled": openai.enabled,
         "openai_model": openai.model,
+        "public_context_enabled": os.getenv("HADES_REALWORLD_PUBLIC_CONTEXT", "1") != "0",
     }
 
 
