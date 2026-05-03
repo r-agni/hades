@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 
 from hades import config
-from hades.state import CommsLink, ConvoyState, DroneState, EdgeState, Pose, SimFrame
+from hades.state import CommsLink, ConvoyState, DroneState, EdgeState, Pose, SimFrame, ThreatState
 
 
 def _clamp01(value: float) -> float:
@@ -39,7 +39,7 @@ class SyntheticSimPublisher:
         self,
         *,
         layout: SyntheticWorldLayout | None = None,
-        environment: str = config.SCENE.environment_emergency,
+        environment: str = config.SCENE.environment,
     ) -> None:
         self.layout = layout or SyntheticWorldLayout()
         self.environment = environment
@@ -191,13 +191,159 @@ class SyntheticSimPublisher:
         return links
 
 
-class IsaacSimPublisher:
-    """Placeholder adapter boundary for the future Isaac extension.
+class Track2SimPublisher:
+    """Full Track 2 pipeline: comms graph, compute scheduler, threats, navigation.
 
-    Later tracks should replace the synthetic frame generation with USD prim
-    scraping and sensor metadata from the live Isaac stage while preserving
-    the returned SimFrame contract.
+    Composes SyntheticSimPublisher for base actor positions and adds the
+    constraint layers on top. Uses stub=True by default so tests work
+    without real ONNX models installed.
+    """
+
+    def __init__(
+        self,
+        *,
+        layout: SyntheticWorldLayout | None = None,
+        environment: str = config.SCENE.environment,
+        stub: bool = True,
+    ) -> None:
+        from hades.comms import CommsGraph
+        from hades.compute import ComputeScheduler
+        from hades.models import ModelRegistry
+        from hades.navigation import ConvoyRouter, DroneNavigator
+        from hades.threats import ThreatSpawner
+
+        self._base = SyntheticSimPublisher(layout=layout, environment=environment)
+        self._comms = CommsGraph()
+        self._scheduler = ComputeScheduler()
+        self._spawner = ThreatSpawner(mode="deterministic")
+        registry = ModelRegistry(stub=stub)
+        self._navigator = DroneNavigator(registry)
+        self._router = ConvoyRouter(registry)
+        self.started_at = time.monotonic()
+        self._active_route: str = "main"
+
+    def now_frame(self) -> SimFrame:
+        return self.frame_at(time.monotonic() - self.started_at)
+
+    def frame_at(self, t: float) -> SimFrame:
+        base_frame = self._base.frame_at(t)
+
+        # Step threats
+        threats = self._spawner.step(t)
+
+        # Update convoy route when choke_a threats are active
+        if any(th.spawn_zone == "choke_a" for th in threats):
+            self._active_route = self._router.select_route(base_frame.convoy[0], threats)
+
+        convoy_states = [
+            ConvoyState(
+                id=c.id,
+                pose=c.pose,
+                speed_mps=c.speed_mps,
+                route_progress_pct=c.route_progress_pct,
+                active_route_id=self._active_route,
+                threat_ahead=any(
+                    math.sqrt((th.pose.x - c.pose.x) ** 2 + (th.pose.y - c.pose.y) ** 2) < 80.0
+                    for th in threats
+                ),
+            )
+            for c in base_frame.convoy
+        ]
+
+        # Update comms topology
+        self._comms.step(base_frame.drones, base_frame.edges, convoy_states)
+
+        # Build interim frame for scheduler
+        interim = SimFrame(
+            t=t,
+            drones=base_frame.drones,
+            edges=base_frame.edges,
+            convoy=convoy_states,
+            links=self._comms.links(),
+            events=[],
+            environment=base_frame.environment,
+            threats=threats,
+        )
+
+        compute_events = self._scheduler.schedule_all(interim, self._comms)
+
+        return SimFrame(
+            t=round(t, 3),
+            drones=base_frame.drones,
+            edges=base_frame.edges,
+            convoy=convoy_states,
+            links=self._comms.links(),
+            events=[],
+            environment=base_frame.environment,
+            threats=threats,
+            compute_events=compute_events,
+        )
+
+    def reset(self, env_ids=None) -> None:
+        """Reset publisher state (called by HADESEnv._reset_idx)."""
+        self._spawner.reset(env_ids)
+        self._active_route = "main"
+        self.started_at = time.monotonic()
+
+
+class IsaacSimPublisher:
+    """Scrapes live prim state from a running Isaac Sim stage.
+
+    Must be instantiated from within an Isaac Sim Kit process where
+    omni.usd and omni.isaac.core are available.
     """
 
     def now_frame(self) -> SimFrame:
-        raise NotImplementedError("Isaac stage scraping is not implemented in Phase 1")
+        import omni.usd
+        from pxr import UsdGeom
+
+        stage = omni.usd.get_context().get_stage()
+        t = time.monotonic()
+        root = "/hades_phase_1"
+
+        drones: list[DroneState] = []
+        edges: list[EdgeState] = []
+        convoy: list[ConvoyState] = []
+
+        for prim in stage.GetPrimAtPath(root).GetChildren():
+            name = prim.GetName()
+            xf = UsdGeom.Xformable(prim)
+            ops = xf.GetOrderedXformOps()
+            pos = ops[0].Get() if ops else (0.0, 0.0, 0.0)
+            pose = Pose(x=float(pos[0]), y=float(pos[1]), z=float(pos[2]))
+
+            if name.startswith("parent_"):
+                drones.append(DroneState(
+                    id=name, tier="PARENT", pose=pose,
+                    battery_pct=config.COMPUTE.parent_default_battery_pct,
+                    compute_load=0.0, current_task="idle",
+                ))
+            elif name.startswith("small_"):
+                drones.append(DroneState(
+                    id=name, tier="SMALL", pose=pose,
+                    battery_pct=config.COMPUTE.small_default_battery_pct,
+                    compute_load=0.0, current_task="idle",
+                ))
+            elif name.startswith("edge_"):
+                edges.append(EdgeState(
+                    id=name, pose=pose,
+                    battery_pct=config.COMPUTE.edge_default_battery_pct,
+                    compute_load=0.0, alive=True,
+                    compute_capacity_tops=config.COMPUTE.edge_tops,
+                    wifi_radius_m=config.COMMS.wifi_mesh_radius_m,
+                    lora_radius_m=config.COMMS.lora_radius_m,
+                ))
+            elif name.startswith("convoy_"):
+                convoy.append(ConvoyState(
+                    id=name, pose=pose, speed_mps=0.0, route_progress_pct=0.0,
+                ))
+
+        return SimFrame(
+            t=round(t, 3),
+            drones=drones,
+            edges=edges,
+            convoy=convoy,
+            links=[],
+            events=[],
+            environment=config.SCENE.environment,
+        )

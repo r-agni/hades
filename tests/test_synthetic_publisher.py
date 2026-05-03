@@ -1,6 +1,7 @@
+from pathlib import Path
+
 from bridge.sim_publisher import SyntheticSimPublisher
 from hades import config
-from isaac.environment import GENERATED_FLAT_ROAD, resolve_environment
 
 
 def test_synthetic_frame_has_phase_1_actors() -> None:
@@ -23,12 +24,26 @@ def test_synthetic_frame_serializes_to_protocol_shape() -> None:
     assert {"id", "pose", "battery_pct", "compute_load", "alive"} <= set(payload["edges"][0])
 
 
-def test_environment_resolver_falls_back_to_local_usd(monkeypatch) -> None:
-    monkeypatch.delenv("HADES_CESIUM_STAGE_USD", raising=False)
-    monkeypatch.delenv("HADES_CITY_DEMO_STAGE_USD", raising=False)
+def test_isaac_stage_uses_real_asset_references() -> None:
+    scene_text = Path("isaac/scene.usda").read_text(encoding="utf-8")
 
-    candidate, path = resolve_environment()
+    assert "def Cube" not in scene_text
+    assert "Jetracer/Tracks/track_solid_line.usd" in scene_text
+    assert "Carter/carter_v1_physx_lidar.usd" in scene_text
+    assert "Quadcopter/quadcopter.usd" in scene_text
+    assert "Crazyflie/cf2x.usd" in scene_text
+    assert "Server_1U_A_01.usd" in scene_text
 
-    assert candidate == GENERATED_FLAT_ROAD
-    assert path.name == "scene.usda"
-    assert path.exists()
+
+def test_scene_has_correct_actor_counts() -> None:
+    scene_text = Path("isaac/scene.usda").read_text(encoding="utf-8")
+
+    parent_count = sum(1 for line in scene_text.splitlines() if line.strip().startswith('def Xform "parent_'))
+    small_count = sum(1 for line in scene_text.splitlines() if line.strip().startswith('def Xform "small_'))
+    edge_count = sum(1 for line in scene_text.splitlines() if line.strip().startswith('def Xform "edge_'))
+    convoy_count = sum(1 for line in scene_text.splitlines() if line.strip().startswith('def Xform "convoy_'))
+
+    assert parent_count == config.COUNTS.parent_drones
+    assert small_count == config.COUNTS.small_drones
+    assert edge_count == config.COUNTS.edge_nodes
+    assert convoy_count == config.COUNTS.convoy_vehicles

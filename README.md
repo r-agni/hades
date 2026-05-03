@@ -1,7 +1,7 @@
 HADES: Hierarchical Autonomous Drone Edge System
 
 Phase 1 creates the simulation foundation: actor capability definitions, a
-minimal Isaac/OpenUSD fallback scene, and a FastAPI WebSocket bridge that streams
+real-asset Isaac/OpenUSD scene, and a FastAPI WebSocket bridge that streams
 synthetic `SimFrame` state at 10 Hz.
 
 ## Quick Start
@@ -21,7 +21,6 @@ The bridge also exposes:
 
 - `GET /healthz`
 - `GET /frame`
-- `GET /viz`
 - `WS /stream`
 
 ## Phase 1 Contents
@@ -35,15 +34,18 @@ The bridge also exposes:
   adapter boundary.
 - `isaac/drones/` defines parent drone, small drone, and passive edge-node
   capabilities.
-- `isaac/scene.usda` is an emergency fallback scene with road, convoy, drones,
-  and edge nodes.
+- `isaac/scene.usda` is the active Isaac stage. It references the NVIDIA
+  Jetracer track environment, Carter convoy vehicles, Isaac quadcopters,
+  Crazyflies, and NVIDIA 1U server assets for edge compute nodes.
+- `isaac/capture_hades_preview.py` opens the active stage in Isaac Sim and
+  captures proof frames into an external artifact directory.
 - `infra/aws/` contains optional AWS CLI scaffolding for an Isaac Sim GPU host.
 
-## Environment Priority
+## Visual Environment
 
-1. Cesium for Omniverse real-world road/open-terrain location.
-2. NVIDIA free OpenUSD City Demo Assets Pack.
-3. Generated flat-road fallback in `isaac/scene.usda`.
+The checked-in visual scene is `isaac/scene.usda`. The old generated block
+fallback has been removed from the active workflow so preview captures fail
+instead of silently rendering placeholder cubes.
 
 Phase 1 does not implement autonomy or threat response. Those begin in later
 tracks.

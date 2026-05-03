@@ -9,17 +9,24 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import JSONResponse
 
 from bridge.sim_publisher import SyntheticSimPublisher
-from bridge.viz import VIZ_HTML
 from hades import config
 
 
 app = FastAPI(title="HADES Bridge", version="0.1.0")
-publisher = SyntheticSimPublisher(
-    environment=os.getenv("HADES_ENVIRONMENT", config.SCENE.environment_emergency)
-)
+
+if os.getenv("HADES_PUBLISHER") == "track2":
+    from bridge.sim_publisher import Track2SimPublisher
+    publisher: SyntheticSimPublisher | Track2SimPublisher = Track2SimPublisher(
+        environment=os.getenv("HADES_ENVIRONMENT", config.SCENE.environment),
+        stub=os.getenv("HADES_STUB", "0") != "0",
+    )
+else:
+    publisher = SyntheticSimPublisher(
+        environment=os.getenv("HADES_ENVIRONMENT", config.SCENE.environment)
+    )
 
 
 @app.get("/healthz")
@@ -30,11 +37,6 @@ async def healthz() -> JSONResponse:
 @app.get("/frame")
 async def frame() -> dict[str, Any]:
     return publisher.now_frame().to_dict()
-
-
-@app.get("/viz", response_class=HTMLResponse)
-async def viz() -> str:
-    return VIZ_HTML
 
 
 @app.websocket(config.BRIDGE.websocket_path)

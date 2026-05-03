@@ -6,6 +6,12 @@ requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
+    "numpy>=1.26",
+    "onnxruntime>=1.17",
+    "ahrs>=0.3",
+    "filterpy>=1.4",
+    "networkx>=3.2",
+    "scikit-image>=0.22",
 ]
 
 [project.optional-dependencies]
@@ -13,6 +19,9 @@ dev = [
     "pytest>=8.0",
     "websockets>=12.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["hades*", "bridge*", "isaac*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

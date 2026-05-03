@@ -7,184 +7,227 @@
 
 def Xform "hades_phase_1"
 {
-        def Cube "road"
+    def Xform "environment"
+    {
+        def Xform "jetracer_track_context" (
+            prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Environments/Jetracer/Tracks/track_solid_line.usd@
+        )
         {
-            double size = 1
-            matrix4d xformOp:transform = ( (420, 0, 0, 0), (0, 10.0, 0, 0), (0, 0, 0.04, 0), (0, 0, 0.02, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
+            double3 xformOp:translate = (0, 0, -0.04)
+            double3 xformOp:scale = (42, 42, 1)
+            uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
         }
-        def Cube "terrain_pad"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (520, 0, 0, 0), (0, 180, 0, 0), (0, 0, 0.02, 0), (0, 0, -0.05, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "convoy_0"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (6, 0, 0, 0), (0, 3, 0, 0), (0, 0, 1.6, 0), (-190.0, -3.0, 0.8, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "convoy_1"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (6, 0, 0, 0), (0, 3, 0, 0), (0, 0, 1.6, 0), (-204.0, 3.0, 0.8, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "parent_0"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (2.8, 0, 0, 0), (0, 2.8, 0, 0), (0, 0, 0.35, 0), (-208.0, 32.0, 34.0, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "parent_1"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (2.8, 0, 0, 0), (0, 2.8, 0, 0), (0, 0, 0.35, 0), (-172.0, -32.0, 34.0, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "small_0"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-166.0, 0.0, 18.0, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "small_1"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-178.0, 20.784609690826528, 18.42073549240395, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "small_2"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-202.0, 20.784609690826528, 18.45464871341284, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "small_3"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-214.0, 2.9391523179536475e-15, 18.070560004029932, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "small_4"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-202.0, -20.784609690826525, 17.621598752346035, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "small_5"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.2, 0, 0, 0), (0, 1.2, 0, 0), (0, 0, 0.35, 0), (-178.0, -20.784609690826528, 17.52053786266843, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_0"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-190.0, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_1"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-167.64705882352942, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_2"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-145.29411764705884, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_3"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-122.94117647058823, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_4"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-100.58823529411765, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_5"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-78.23529411764707, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_6"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-55.882352941176464, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_7"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-33.529411764705884, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_8"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (-11.176470588235304, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_9"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (11.176470588235276, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_10"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (33.529411764705856, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_11"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (55.882352941176464, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_12"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (78.23529411764707, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_13"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (100.58823529411762, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_14"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (122.94117647058823, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_15"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (145.29411764705878, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_16"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (167.6470588235294, 42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
-        def Cube "edge_17"
-        {
-            double size = 1
-            matrix4d xformOp:transform = ( (1.6, 0, 0, 0), (0, 1.6, 0, 0), (0, 0, 2.4, 0), (190.0, -42.0, 1.2, 1) )
-            uniform token[] xformOpOrder = ["xformOp:transform"]
-        }
+    }
+
+    # Convoy — 2 Carter robots at route start (x = -190)
+    def Xform "convoy_0" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/NVIDIA/Carter/carter_v1_physx_lidar.usd@
+    )
+    {
+        double3 xformOp:translate = (-190.0, -3.0, 0.8)
+        double3 xformOp:rotateXYZ = (0, 0, 0)
+        double3 xformOp:scale = (1.35, 1.35, 1.35)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "convoy_1" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/NVIDIA/Carter/carter_v1_physx_lidar.usd@
+    )
+    {
+        double3 xformOp:translate = (-204.0, 3.0, 0.8)
+        double3 xformOp:rotateXYZ = (0, 0, 0)
+        double3 xformOp:scale = (1.35, 1.35, 1.35)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    # Parent drones — Skydio X10D class, hovering above convoy start
+    def Xform "parent_0" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/IsaacSim/Quadcopter/quadcopter.usd@
+    )
+    {
+        double3 xformOp:translate = (-208.0, 32.0, 34.0)
+        double3 xformOp:rotateXYZ = (0, 0, 0)
+        double3 xformOp:scale = (16.0, 16.0, 16.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "parent_1" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/IsaacSim/Quadcopter/quadcopter.usd@
+    )
+    {
+        double3 xformOp:translate = (-172.0, -32.0, 34.0)
+        double3 xformOp:rotateXYZ = (0, 0, 0)
+        double3 xformOp:scale = (16.0, 16.0, 16.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    # Small drones — Crazyflie 2.1 class, ring around convoy start
+    def Xform "small_0" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+    )
+    {
+        double3 xformOp:translate = (-166.0, 0.0, 18.0)
+        double3 xformOp:rotateXYZ = (0, 0, 0)
+        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "small_1" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+    )
+    {
+        double3 xformOp:translate = (-178.0, 20.8, 18.0)
+        double3 xformOp:rotateXYZ = (0, 0, 60)
+        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "small_2" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+    )
+    {
+        double3 xformOp:translate = (-202.0, 20.8, 18.0)
+        double3 xformOp:rotateXYZ = (0, 0, 120)
+        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "small_3" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+    )
+    {
+        double3 xformOp:translate = (-214.0, 0.0, 18.0)
+        double3 xformOp:rotateXYZ = (0, 0, 180)
+        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "small_4" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+    )
+    {
+        double3 xformOp:translate = (-202.0, -20.8, 18.0)
+        double3 xformOp:rotateXYZ = (0, 0, 240)
+        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    def Xform "small_5" (
+        prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/Isaac/Robots/Bitcraze/Crazyflie/cf2x.usd@
+    )
+    {
+        double3 xformOp:translate = (-178.0, -20.8, 18.0)
+        double3 xformOp:rotateXYZ = (0, 0, 300)
+        double3 xformOp:scale = (28.0, 28.0, 28.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"]
+    }
+
+    # Edge nodes — 18 x Server_1U along the 420 m route, alternating sides
+    def Xform "edge_0" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-190.0, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_1" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-165.3, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_2" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-140.6, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_3" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-115.9, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_4" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-91.2, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_5" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-66.5, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_6" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-41.8, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_7" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (-17.1, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_8" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (7.6, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_9" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (32.4, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_10" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (57.1, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_11" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (81.8, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_12" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (106.5, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_13" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (131.2, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_14" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (155.9, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_15" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (180.6, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_16" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (180.6, 42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, 90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
+
+    def Xform "edge_17" ( prepend references = @https://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/5.1/NVIDIA/Assets/DigitalTwin/Assets/Datacenter/Server_Nodes/Servers/Server_1U_A_01.usd@ )
+    { double3 xformOp:translate = (190.0, -42.0, 1.2)
+      double3 xformOp:rotateXYZ = (0, 0, -90)
+      double3 xformOp:scale = (0.01, 0.01, 0.01)
+      uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ", "xformOp:scale"] }
 }

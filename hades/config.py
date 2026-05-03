@@ -42,13 +42,36 @@ class ComputeConfig:
 @dataclass(frozen=True)
 class SceneConfig:
     name: str = "hades_phase_1"
-    environment_primary: str = "cesium_for_omniverse"
-    environment_fallback: str = "nvidia_openusd_city_demo"
-    environment_emergency: str = "generated_flat_road"
-    route_length_m: float = 420.0
+    environment: str = "nvidia_jetracer_track_real_assets"
+    route_length_m: float = 1200.0
     road_width_m: float = 10.0
     parent_hover_altitude_m: float = 34.0
     small_hover_altitude_m: float = 18.0
+
+
+@dataclass(frozen=True)
+class RouteConfig:
+    route_length_m: float = 1200.0
+    active_route: str = "main"
+
+
+@dataclass(frozen=True)
+class ComputeBudgetConfig:
+    mobilenet_ssd_tops: float = 0.08
+    madgwick_imu_tops: float = 0.01
+    collision_pd_tops: float = 0.005
+    yolov8n_offload_tops: float = 8.0
+    yolov8n_local_tops: float = 8.0
+    ekf_fusion_tops: float = 5.0
+    astar_plan_tops: float = 2.0
+    yolov8m_offload_tops: float = 12.0
+
+
+@dataclass(frozen=True)
+class CommsLatencyConfig:
+    base_ms: float = 5.0
+    congestion_factor: float = 0.5
+    distance_factor: float = 0.01
 
 
 BRIDGE = BridgeConfig()
@@ -56,6 +79,15 @@ COMMS = CommsConfig()
 COUNTS = ActorCounts()
 COMPUTE = ComputeConfig()
 SCENE = SceneConfig()
+ROUTE = RouteConfig()
+COMPUTE_BUDGET = ComputeBudgetConfig()
+COMMS_LATENCY = CommsLatencyConfig()
+
+ROUTE_WAYPOINTS: dict[str, list[tuple[float, float]]] = {
+    "main":         [(-580, 0), (0, 10), (580, 0)],
+    "north_bypass": [(-580, 0), (-200, 130), (200, 130), (580, 0)],
+    "south_bypass": [(-580, 0), (-200, -130), (200, -130), (580, 0)],
+}
 
 
 PARENT_SENSOR_SUITE = {
