@@ -20,6 +20,7 @@ except ImportError:  # pragma: no cover - dependency declared, defensive for par
 from hades.realworld.geo import LatLng
 from hades.realworld.google import GoogleMapsClient, GoogleMapsError
 from hades.realworld.optimizer import ManualEdge
+from hades.realworld.openai_settings import load_openai_settings
 from hades.realworld.scenario import (
     DEFAULT_DESTINATION,
     DEFAULT_EDGE_COUNT,
@@ -56,6 +57,12 @@ class ManualEdgeRequest(BaseModel):
 
 class EdgePatchRequest(BaseModel):
     manual_edges: list[ManualEdgeRequest] = Field(default_factory=list)
+    approved_edge_ids: list[str] = Field(default_factory=list)
+    rejected_edge_ids: list[str] = Field(default_factory=list)
+
+
+class RerouteApplyRequest(BaseModel):
+    proposal_id: str
 
 
 @router.get("/viz/realworld-tempVisualizer", response_class=HTMLResponse, tags=["ui"])
@@ -68,6 +75,7 @@ async def realworld_config() -> dict[str, object]:
     browser_key = os.getenv("VITE_GOOGLE_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY")
     if not browser_key:
         raise HTTPException(status_code=503, detail="VITE_GOOGLE_API_KEY is required")
+    openai = load_openai_settings()
     return {
         "google_maps_key": browser_key,
         "default_origin": DEFAULT_ORIGIN,
@@ -75,6 +83,8 @@ async def realworld_config() -> dict[str, object]:
         "default_edge_count": DEFAULT_EDGE_COUNT,
         "default_wifi_radius_m": DEFAULT_WIFI_RADIUS_M,
         "default_search_buffer_m": DEFAULT_SEARCH_BUFFER_M,
+        "openai_enabled": openai.enabled,
+        "openai_model": openai.model,
     }
 
 
@@ -105,9 +115,53 @@ async def update_realworld_edges(
         for edge in request.manual_edges
     ]
     try:
-        scenario = await service.update_edges(scenario_id, manual_edges)
+        scenario = await service.update_edges(
+            scenario_id,
+            manual_edges,
+            approved_edge_ids=request.approved_edge_ids,
+            rejected_edge_ids=request.rejected_edge_ids,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return scenario.to_dict()
+
+
+@router.post("/api/realworld/scenarios/{scenario_id}/start", tags=["realworld"])
+async def start_realworld_scenario(scenario_id: str) -> dict[str, object]:
+    service = _get_service()
+    try:
+        scenario = service.start(scenario_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except GoogleMapsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return scenario.to_dict()
+
+
+@router.post("/api/realworld/scenarios/{scenario_id}/reroutes", tags=["realworld"])
+async def propose_realworld_reroutes(scenario_id: str) -> dict[str, object]:
+    service = _get_service()
+    try:
+        scenario = await service.propose_reroutes(scenario_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except GoogleMapsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return scenario.to_dict()
+
+
+@router.post("/api/realworld/scenarios/{scenario_id}/reroutes/apply", tags=["realworld"])
+async def apply_realworld_reroute(
+    scenario_id: str,
+    request: RerouteApplyRequest,
+) -> dict[str, object]:
+    service = _get_service()
+    try:
+        scenario = await service.apply_reroute(scenario_id, request.proposal_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except GoogleMapsError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     return scenario.to_dict()
 
 
@@ -118,6 +172,10 @@ async def realworld_stream(websocket: WebSocket, scenario_id: str) -> None:
         scenario = _get_service().get(scenario_id)
     except (HTTPException, KeyError) as exc:
         await websocket.send_text(json.dumps({"error": str(exc)}))
+        await websocket.close(code=1008)
+        return
+    if not scenario.started:
+        await websocket.send_text(json.dumps({"error": "Scenario must be started after edge approval"}))
         await websocket.close(code=1008)
         return
 
@@ -139,4 +197,3 @@ def _get_service() -> RealWorldScenarioService:
         raise HTTPException(status_code=503, detail="GOOGLE_MAPS_API_KEY is required")
     _service = RealWorldScenarioService(GoogleMapsClient(api_key))
     return _service
-

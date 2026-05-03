@@ -64,6 +64,16 @@ class GoogleMapsClient:
         return LatLng(float(loc["lat"]), float(loc["lng"]))
 
     async def compute_route(self, origin: LatLng, destination: LatLng) -> GoogleRoute:
+        routes = await self.compute_routes(origin, destination, alternatives=False)
+        return routes[0]
+
+    async def compute_routes(
+        self,
+        origin: LatLng,
+        destination: LatLng,
+        *,
+        alternatives: bool = False,
+    ) -> list[GoogleRoute]:
         body = {
             "origin": {"location": {"latLng": {"latitude": origin.lat, "longitude": origin.lng}}},
             "destination": {
@@ -71,7 +81,7 @@ class GoogleMapsClient:
             },
             "travelMode": "DRIVE",
             "routingPreference": "TRAFFIC_AWARE",
-            "computeAlternativeRoutes": False,
+            "computeAlternativeRoutes": alternatives,
             "languageCode": "en-US",
             "units": "METRIC",
         }
@@ -86,17 +96,7 @@ class GoogleMapsClient:
         routes = data.get("routes") or []
         if not routes:
             raise GoogleMapsError("Routes API returned no route")
-        route = routes[0]
-        encoded = route.get("polyline", {}).get("encodedPolyline")
-        if not encoded:
-            raise GoogleMapsError("Routes API returned no polyline")
-        duration_raw = str(route.get("duration", "0s")).rstrip("s")
-        return GoogleRoute(
-            points=decode_polyline(encoded),
-            distance_m=float(route.get("distanceMeters", 0.0)),
-            duration_s=float(duration_raw or 0.0),
-            encoded_polyline=encoded,
-        )
+        return [self._route_from_payload(route) for route in routes]
 
     async def elevations(self, points: list[LatLng]) -> list[ElevationSample]:
         if not points:
@@ -192,9 +192,20 @@ class GoogleMapsClient:
             raise GoogleMapsError("Google request returned non-object JSON")
         return data
 
+    def _route_from_payload(self, route: dict[str, Any]) -> GoogleRoute:
+        encoded = route.get("polyline", {}).get("encodedPolyline")
+        if not encoded:
+            raise GoogleMapsError("Routes API returned no polyline")
+        duration_raw = str(route.get("duration", "0s")).rstrip("s")
+        return GoogleRoute(
+            points=decode_polyline(encoded),
+            distance_m=float(route.get("distanceMeters", 0.0)),
+            duration_s=float(duration_raw or 0.0),
+            encoded_polyline=encoded,
+        )
+
 
 async def gather_limited(*coros: Any) -> list[Any]:
     """Tiny wrapper to keep call sites readable and future throttling centralized."""
 
     return list(await asyncio.gather(*coros))
-

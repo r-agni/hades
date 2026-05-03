@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import math
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 
-from hades.realworld.geo import LatLng, cumulative_distances, densify_route, route_bounds
-from hades.realworld.google import GoogleMapsClient, GoogleMapsError
+from hades.realworld.geo import (
+    LatLng,
+    cumulative_distances,
+    densify_route,
+    haversine_m,
+    route_bounds,
+)
+from hades.realworld.google import GoogleMapsClient, GoogleMapsError, GoogleRoute
+from hades.realworld.capabilities import PARENT_CAPABILITY
 from hades.realworld.optimizer import (
     EdgeAnalysis,
+    EdgeRecommendation,
     ManualEdge,
     build_route_samples,
     generate_candidate_points,
@@ -19,11 +28,59 @@ from hades.realworld.optimizer import (
 from hades.realworld.publisher import RealWorldSimPublisher
 
 
-DEFAULT_ORIGIN = "Griffith Observatory, Los Angeles, CA"
-DEFAULT_DESTINATION = "Travel Town Museum, Los Angeles, CA"
+DEFAULT_ORIGIN = "Maidan Nezalezhnosti, Kyiv, Ukraine"
+DEFAULT_DESTINATION = "National Botanical Garden, Kyiv, Ukraine"
 DEFAULT_EDGE_COUNT = 18
 DEFAULT_WIFI_RADIUS_M = 150.0
 DEFAULT_SEARCH_BUFFER_M = 600.0
+REALWORLD_PARENT_DRONES = 4
+REALWORLD_SMALL_DRONES = 16
+
+EdgeStatus = Literal["pending", "approved", "moved", "rejected"]
+
+
+@dataclass(frozen=True)
+class RerouteProposal:
+    id: str
+    route_points: list[LatLng]
+    distance_m: float
+    duration_s: float
+    encoded_polyline: str
+    risk_score: float
+    edge_coverage_score: float
+    connectivity_score: float
+    sensor_coverage_score: float
+    score: float
+    reasons: tuple[str, ...]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "points": [point.to_dict() for point in self.route_points],
+            "distance_m": round(self.distance_m, 1),
+            "duration_s": round(self.duration_s, 1),
+            "risk_score": round(self.risk_score, 3),
+            "edge_coverage_score": round(self.edge_coverage_score, 3),
+            "connectivity_score": round(self.connectivity_score, 3),
+            "sensor_coverage_score": round(self.sensor_coverage_score, 3),
+            "score": round(self.score, 1),
+            "reasons": list(self.reasons),
+        }
+
+
+@dataclass
+class RouteAnalysisBundle:
+    route_points: list[LatLng]
+    route_sample_points: list[LatLng]
+    route_sample_distances: list[float]
+    route_distance_m: float
+    route_duration_s: float
+    encoded_polyline: str
+    candidate_points: list[LatLng]
+    candidate_elevations: list[Any]
+    candidate_roads: list[Any]
+    route_samples: list[Any]
+    analysis: EdgeAnalysis
 
 
 @dataclass
@@ -48,7 +105,27 @@ class RealWorldScenario:
     route_samples: list[Any]
     analysis: EdgeAnalysis
     publisher: RealWorldSimPublisher
+    edge_statuses: dict[str, EdgeStatus] = field(default_factory=dict)
+    started: bool = False
+    reroute_proposals: list[RerouteProposal] = field(default_factory=list)
+    applied_reroute_id: str | None = None
     created_at: float = field(default_factory=time.time)
+
+    @property
+    def min_required_stationary_edges(self) -> int:
+        return max(1, min(3, self.edge_count))
+
+    @property
+    def approved_stationary_edge_ids(self) -> set[str]:
+        return {
+            edge_id
+            for edge_id, status in self.edge_statuses.items()
+            if status in {"approved", "moved"}
+        }
+
+    @property
+    def can_start(self) -> bool:
+        return len(self.approved_stationary_edge_ids) >= self.min_required_stationary_edges
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -59,6 +136,16 @@ class RealWorldScenario:
                 "edge_count": self.edge_count,
                 "wifi_radius_m": self.wifi_radius_m,
                 "search_buffer_m": self.search_buffer_m,
+                "parent_drones": REALWORLD_PARENT_DRONES,
+                "small_drones": REALWORLD_SMALL_DRONES,
+                "traffic_layer_available": False,
+            },
+            "preflight": {
+                "started": self.started,
+                "can_start": self.can_start,
+                "approved_stationary_edges": len(self.approved_stationary_edge_ids),
+                "min_required_stationary_edges": self.min_required_stationary_edges,
+                "instructions": "Approve or move recommended stationary edge nodes before starting.",
             },
             "route": {
                 "points": [point.to_dict() for point in self.route_points],
@@ -68,8 +155,31 @@ class RealWorldScenario:
                 "encoded_polyline": self.encoded_polyline,
                 "bounds": route_bounds(self.route_points),
             },
-            "analysis": self.analysis.to_dict(),
+            "analysis": {
+                **self.analysis.to_dict(),
+                "edges": self._edge_dicts(),
+                "attack_vectors": self.publisher.attack_vectors,
+                "reroute_proposals": [proposal.to_dict() for proposal in self.reroute_proposals],
+            },
         }
+
+    def _edge_dicts(self) -> list[dict[str, object]]:
+        result: list[dict[str, object]] = []
+        total_route = max(1.0, self.analysis.route_length_m)
+        for edge in self.analysis.edges:
+            status = self.edge_statuses.get(edge.id, "pending")
+            payload = edge.to_dict()
+            payload.update(
+                {
+                    "edge_type": "manual_stationary_edge" if edge.manual else "stationary_edge",
+                    "status": status,
+                    "approved": status in {"approved", "moved"},
+                    "covered_route_percent": round(100.0 * edge.coverage_m / total_route, 1),
+                    "redundancy_contribution": _redundancy_contribution(edge.id, self.analysis),
+                }
+            )
+            result.append(payload)
+        return result
 
 
 class RealWorldScenarioService:
@@ -95,34 +205,23 @@ class RealWorldScenarioService:
         origin_label, origin_point = await self._resolve_location(origin or DEFAULT_ORIGIN)
         dest_label, dest_point = await self._resolve_location(destination or DEFAULT_DESTINATION)
         route = await self._google.compute_route(origin_point, dest_point)
-        route_sample_points = densify_route(route.points, spacing_m=75.0, max_points=400)
-        route_sample_distances = cumulative_distances(route_sample_points)
-        route_elevations = await self._google.elevations(route_sample_points)
-        route_samples = build_route_samples(route_sample_points, route_sample_distances, route_elevations)
-        candidate_points = generate_candidate_points(
-            route_sample_points,
-            search_buffer_m=search_buffer_m,
-        )
-        if not candidate_points:
-            raise GoogleMapsError("No edge-placement candidates were generated for this route")
-
-        candidate_elevations = await self._google.elevations(candidate_points)
-        candidate_roads = await self._google.nearest_roads(candidate_points)
-        analysis = optimize_edges(
-            route_samples,
-            candidate_points,
-            candidate_elevations,
-            candidate_roads,
+        bundle = await self._analyze_route(
+            route,
             edge_count=edge_count,
             wifi_radius_m=wifi_radius_m,
+            search_buffer_m=search_buffer_m,
         )
 
         scenario_id = f"rw_{uuid.uuid4().hex[:10]}"
+        edge_statuses = {edge.id: "pending" for edge in bundle.analysis.edges}
         publisher = RealWorldSimPublisher(
             scenario_id=scenario_id,
-            route_points=route_sample_points,
-            analysis=analysis,
+            route_points=bundle.route_sample_points,
+            analysis=bundle.analysis,
             wifi_radius_m=wifi_radius_m,
+            approved_stationary_edge_ids=set(),
+            parent_count=REALWORLD_PARENT_DRONES,
+            small_count=REALWORLD_SMALL_DRONES,
         )
         scenario = RealWorldScenario(
             id=scenario_id,
@@ -130,21 +229,12 @@ class RealWorldScenarioService:
             destination_label=dest_label,
             origin=origin_point,
             destination=dest_point,
-            route_points=route.points,
-            route_sample_points=route_sample_points,
-            route_sample_distances=route_sample_distances,
-            route_distance_m=route.distance_m or route_sample_distances[-1],
-            route_duration_s=route.duration_s,
-            encoded_polyline=route.encoded_polyline,
             edge_count=edge_count,
             wifi_radius_m=wifi_radius_m,
             search_buffer_m=search_buffer_m,
-            candidate_points=candidate_points,
-            candidate_elevations=candidate_elevations,
-            candidate_roads=candidate_roads,
-            route_samples=route_samples,
-            analysis=analysis,
             publisher=publisher,
+            edge_statuses=edge_statuses,
+            **bundle.__dict__,
         )
         self._scenarios[scenario_id] = scenario
         return scenario
@@ -153,6 +243,9 @@ class RealWorldScenarioService:
         self,
         scenario_id: str,
         manual_edges: list[ManualEdge],
+        *,
+        approved_edge_ids: list[str] | None = None,
+        rejected_edge_ids: list[str] | None = None,
     ) -> RealWorldScenario:
         scenario = self.get(scenario_id)
         analysis = optimize_edges(
@@ -165,8 +258,165 @@ class RealWorldScenarioService:
             manual_edges=manual_edges,
         )
         scenario.analysis = analysis
-        scenario.publisher.set_analysis(analysis)
+        next_statuses: dict[str, EdgeStatus] = {
+            edge.id: scenario.edge_statuses.get(edge.id, "pending")
+            for edge in analysis.edges
+        }
+        for manual in manual_edges:
+            if manual.id in next_statuses:
+                next_statuses[manual.id] = "moved"
+        for edge_id in approved_edge_ids or []:
+            if edge_id in next_statuses:
+                next_statuses[edge_id] = "approved"
+        for edge_id in rejected_edge_ids or []:
+            if edge_id in next_statuses:
+                next_statuses[edge_id] = "rejected"
+        scenario.edge_statuses = next_statuses
+        self._sync_publisher(scenario)
         return scenario
+
+    def start(self, scenario_id: str) -> RealWorldScenario:
+        scenario = self.get(scenario_id)
+        if not scenario.can_start:
+            raise GoogleMapsError(
+                f"Approve at least {scenario.min_required_stationary_edges} stationary edge nodes before starting"
+            )
+        scenario.started = True
+        scenario.publisher.start()
+        self._sync_publisher(scenario)
+        return scenario
+
+    async def propose_reroutes(self, scenario_id: str) -> RealWorldScenario:
+        scenario = self.get(scenario_id)
+        live_anchor = scenario.publisher.current_route_anchor() if scenario.started else None
+        route_origin = live_anchor["point"] if live_anchor is not None else scenario.origin
+        routes = await self._google.compute_routes(route_origin, scenario.destination, alternatives=True)
+        proposals: list[RerouteProposal] = []
+        current_encoded = None if scenario.started else scenario.encoded_polyline
+        active_stationary_edges = _active_stationary_edges(scenario)
+        baseline_distance_m = max(1.0, routes[0].distance_m if routes else scenario.route_distance_m)
+        for idx, route in enumerate(routes):
+            if route.encoded_polyline == current_encoded:
+                continue
+            risk = _route_risk_score(route.points, scenario.publisher.attack_vectors)
+            distance_penalty = route.distance_m / baseline_distance_m
+            support = _route_edge_support_scores(route.points, active_stationary_edges, scenario.wifi_radius_m)
+            score = (
+                100.0
+                - risk * 55.0
+                - distance_penalty * 24.0
+                + support["edge_coverage_score"] * 28.0
+                + support["connectivity_score"] * 18.0
+                + support["sensor_coverage_score"] * 14.0
+            )
+            proposals.append(
+                RerouteProposal(
+                    id=f"reroute_{idx}",
+                    route_points=route.points,
+                    distance_m=route.distance_m,
+                    duration_s=route.duration_s,
+                    encoded_polyline=route.encoded_polyline,
+                    risk_score=risk,
+                    edge_coverage_score=support["edge_coverage_score"],
+                    connectivity_score=support["connectivity_score"],
+                    sensor_coverage_score=support["sensor_coverage_score"],
+                    score=score,
+                    reasons=(
+                        f"Synthetic risk exposure {risk:.2f}",
+                        (
+                            f"Live reroute starts {live_anchor['route_progress_pct']:.1f}% along the active route"
+                            if live_anchor is not None
+                            else "Preflight reroute starts at scenario origin"
+                        ),
+                        f"Distance {route.distance_m:.0f} m",
+                        f"Approved edge coverage {support['edge_coverage_score'] * 100.0:.0f}%",
+                        f"Parent-edge connectivity {support['connectivity_score'] * 100.0:.0f}%",
+                        "Auto-applies after warning while keeping the live stream running",
+                    ),
+                )
+            )
+        scenario.reroute_proposals = sorted(proposals, key=lambda p: p.score, reverse=True)[:3]
+        return scenario
+
+    async def apply_reroute(self, scenario_id: str, proposal_id: str) -> RealWorldScenario:
+        scenario = self.get(scenario_id)
+        proposal = next((p for p in scenario.reroute_proposals if p.id == proposal_id), None)
+        if proposal is None:
+            raise KeyError(f"Unknown reroute proposal {proposal_id}")
+        preserved_edges = _active_stationary_edges(scenario) if scenario.started else []
+        bundle = await self._analyze_route(
+            GoogleRoute(
+                points=proposal.route_points,
+                distance_m=proposal.distance_m,
+                duration_s=proposal.duration_s,
+                encoded_polyline=proposal.encoded_polyline,
+            ),
+            edge_count=scenario.edge_count,
+            wifi_radius_m=scenario.wifi_radius_m,
+            search_buffer_m=scenario.search_buffer_m,
+            manual_edges=[ManualEdge(id=edge.id, point=edge.point) for edge in preserved_edges],
+        )
+        for key, value in bundle.__dict__.items():
+            setattr(scenario, key, value)
+        preserved_ids = {edge.id for edge in preserved_edges}
+        scenario.edge_statuses = {
+            edge.id: "moved" if edge.id in preserved_ids else "pending"
+            for edge in scenario.analysis.edges
+        }
+        scenario.applied_reroute_id = proposal.id
+        scenario.reroute_proposals = []
+        scenario.publisher.update_route(
+            scenario.route_sample_points,
+            scenario.analysis,
+            applied_reroute_id=proposal.id if scenario.started else None,
+            start_at_route_beginning=scenario.started,
+        )
+        self._sync_publisher(scenario)
+        return scenario
+
+    async def _analyze_route(
+        self,
+        route: GoogleRoute,
+        *,
+        edge_count: int,
+        wifi_radius_m: float,
+        search_buffer_m: float,
+        manual_edges: list[ManualEdge] | None = None,
+    ) -> RouteAnalysisBundle:
+        route_sample_points = densify_route(route.points, spacing_m=75.0, max_points=400)
+        route_sample_distances = cumulative_distances(route_sample_points)
+        route_elevations = await self._google.elevations(route_sample_points)
+        route_samples = build_route_samples(route_sample_points, route_sample_distances, route_elevations)
+        candidate_points = generate_candidate_points(
+            route_sample_points,
+            search_buffer_m=search_buffer_m,
+        )
+        if not candidate_points:
+            raise GoogleMapsError("No edge-placement candidates were generated for this route")
+        candidate_elevations = await self._google.elevations(candidate_points)
+        candidate_roads = await self._google.nearest_roads(candidate_points)
+        analysis = optimize_edges(
+            route_samples,
+            candidate_points,
+            candidate_elevations,
+            candidate_roads,
+            edge_count=edge_count,
+            wifi_radius_m=wifi_radius_m,
+            manual_edges=manual_edges,
+        )
+        return RouteAnalysisBundle(
+            route_points=route.points,
+            route_sample_points=route_sample_points,
+            route_sample_distances=route_sample_distances,
+            route_distance_m=route.distance_m or route_sample_distances[-1],
+            route_duration_s=route.duration_s,
+            encoded_polyline=route.encoded_polyline,
+            candidate_points=candidate_points,
+            candidate_elevations=candidate_elevations,
+            candidate_roads=candidate_roads,
+            route_samples=route_samples,
+            analysis=analysis,
+        )
 
     async def _resolve_location(self, raw: Any) -> tuple[str, LatLng]:
         if isinstance(raw, str):
@@ -183,3 +433,72 @@ class RealWorldScenarioService:
                 return label, await self._google.geocode(label)
         raise GoogleMapsError("Location must be a text query or lat/lng object")
 
+    def _sync_publisher(self, scenario: RealWorldScenario) -> None:
+        scenario.publisher.set_analysis(
+            scenario.analysis,
+            approved_stationary_edge_ids=scenario.approved_stationary_edge_ids,
+            edge_statuses=scenario.edge_statuses,
+        )
+
+
+def _redundancy_contribution(edge_id: str, analysis: EdgeAnalysis) -> float:
+    edge = next((candidate for candidate in analysis.edges if candidate.id == edge_id), None)
+    if edge is None:
+        return 0.0
+    peers = [candidate for candidate in analysis.edges if candidate.id != edge_id]
+    overlap = sum(min(edge.coverage_m, peer.coverage_m) for peer in peers[:4])
+    return round(max(0.0, min(1.0, overlap / max(edge.coverage_m * 4.0, 1.0))), 3)
+
+
+def _active_stationary_edges(scenario: RealWorldScenario) -> list[EdgeRecommendation]:
+    approved_ids = scenario.approved_stationary_edge_ids
+    return [
+        edge
+        for edge in scenario.analysis.edges
+        if edge.id in approved_ids
+    ]
+
+
+def _route_edge_support_scores(
+    route_points: list[LatLng],
+    active_edges: list[EdgeRecommendation],
+    wifi_radius_m: float,
+) -> dict[str, float]:
+    if not route_points or not active_edges:
+        return {
+            "edge_coverage_score": 0.0,
+            "connectivity_score": 0.0,
+            "sensor_coverage_score": 0.0,
+        }
+    samples = densify_route(route_points, spacing_m=90.0, max_points=160)
+    edge_points = [edge.point for edge in active_edges]
+    covered = 0
+    sensor_covered = 0
+    qualities: list[float] = []
+    sensor_radius = PARENT_CAPABILITY.vision_radius_m + wifi_radius_m
+    connectivity_radius = max(wifi_radius_m * 3.5, PARENT_CAPABILITY.vision_radius_m)
+    for sample in samples:
+        nearest = min(haversine_m(sample, edge_point) for edge_point in edge_points)
+        if nearest <= wifi_radius_m:
+            covered += 1
+        if nearest <= sensor_radius:
+            sensor_covered += 1
+        qualities.append(max(0.0, 1.0 - nearest / connectivity_radius))
+    total = max(1, len(samples))
+    return {
+        "edge_coverage_score": covered / total,
+        "connectivity_score": sum(qualities) / total,
+        "sensor_coverage_score": sensor_covered / total,
+    }
+
+
+def _route_risk_score(route_points: list[LatLng], attack_vectors: list[dict[str, object]]) -> float:
+    if not route_points or not attack_vectors:
+        return 0.0
+    route_samples = route_points[:: max(1, len(route_points) // 32)] or route_points
+    exposure = 0.0
+    for vector in attack_vectors:
+        end = LatLng(float(vector["end"]["lat"]), float(vector["end"]["lng"]))
+        closest = min(haversine_m(point, end) for point in route_samples)
+        exposure += max(0.0, 1.0 - closest / 650.0) * float(vector.get("risk", 0.4))
+    return max(0.0, min(1.0, exposure / max(1.0, math.sqrt(len(attack_vectors)))))

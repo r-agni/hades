@@ -18,7 +18,7 @@ class DroneCapability:
 
 PARENT_CAPABILITY = DroneCapability(
     tier="PARENT",
-    vision_radius_m=260.0,
+    vision_radius_m=380.0,
     compute_tops=config.COMPUTE.parent_tops,
     onboard_functions=(
         "route_following",
@@ -37,7 +37,7 @@ PARENT_CAPABILITY = DroneCapability(
 
 SMALL_CAPABILITY = DroneCapability(
     tier="SMALL",
-    vision_radius_m=95.0,
+    vision_radius_m=135.0,
     compute_tops=config.COMPUTE.small_tops,
     onboard_functions=(
         "route_following",
@@ -46,4 +46,3 @@ SMALL_CAPABILITY = DroneCapability(
     ),
     edge_required_functions=(),
 )
-

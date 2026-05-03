@@ -7,65 +7,138 @@
   <link rel="stylesheet" href="/static/realworld-tempVisualizer/style.css" />
 </head>
 <body>
-  <header>
-    <div class="brand">
-      <div class="status" id="statusDot"></div>
-      <div>
-        <div class="logo">HADES <span>REALWORLD</span></div>
-        <div class="sub">live route, terrain, comms, sensing</div>
+  <div class="ops-shell">
+    <header class="mission-topbar">
+      <div class="brand">
+        <div class="status" id="statusDot"></div>
+        <div>
+          <div class="logo">HADES <span>REALWORLD</span></div>
+          <div class="sub">defense operations console</div>
+        </div>
       </div>
-    </div>
-    <form id="scenarioForm" class="controls">
-      <label>
-        Origin
-        <input id="originInput" name="origin" autocomplete="off" />
-      </label>
-      <label>
-        Destination
-        <input id="destinationInput" name="destination" autocomplete="off" />
-      </label>
-      <label>
-        Edges
-        <input id="edgeCountInput" name="edgeCount" type="number" min="1" max="64" />
-      </label>
-      <label>
-        Wi-Fi m
-        <input id="wifiInput" name="wifi" type="number" min="25" max="1500" step="25" />
-      </label>
-      <label>
-        Search m
-        <input id="bufferInput" name="buffer" type="number" min="100" max="5000" step="50" />
-      </label>
-      <button id="analyzeButton" type="submit">Analyze</button>
-    </form>
-  </header>
-
-  <main>
-    <section class="map-shell">
-      <div id="map"></div>
-      <div class="map-hud">
-        <div><span id="routeDistance">--</span><small>route</small></div>
-        <div><span id="coveragePct">--</span><small>coverage</small></div>
+      <div class="mission-strip" aria-label="Mission status">
+        <div><span id="missionRoute">Ukraine civic demo</span><small>route</small></div>
+        <div><span id="missionPhase">Preflight</span><small>phase</small></div>
         <div><span id="streamTime">--</span><small>sim</small></div>
-        <div><span id="computeMode">--</span><small>compute</small></div>
+        <div><span id="coveragePct">--</span><small>coverage</small></div>
+        <div><span id="activeRisk">--</span><small>risk</small></div>
+        <div><span id="computeMode">--</span><small>edge mode</small></div>
       </div>
+      <div class="top-actions">
+        <button id="setupToggle" type="button" class="secondary">Setup</button>
+        <button id="presentationToggle" type="button" class="secondary">Defense Presentation</button>
+      </div>
+    </header>
+
+    <section id="setupPanel" class="setup-drawer">
+      <form id="scenarioForm" class="controls">
+        <label>
+          Origin
+          <input id="originInput" name="origin" autocomplete="off" />
+        </label>
+        <label>
+          Destination
+          <input id="destinationInput" name="destination" autocomplete="off" />
+        </label>
+        <label>
+          Edges
+          <input id="edgeCountInput" name="edgeCount" type="number" min="1" max="64" />
+        </label>
+        <label>
+          Wi-Fi m
+          <input id="wifiInput" name="wifi" type="number" min="25" max="1500" step="25" />
+        </label>
+        <label>
+          Search m
+          <input id="bufferInput" name="buffer" type="number" min="100" max="5000" step="50" />
+        </label>
+        <button id="analyzeButton" type="submit">Analyze</button>
+      </form>
     </section>
-    <aside>
-      <section class="panel-block">
-        <h2>Edge Recommendations</h2>
-        <div id="edgeList" class="edge-list"></div>
+
+    <main class="ops-grid">
+      <section class="map-shell">
+        <div id="map"></div>
+        <div class="map-grid" aria-hidden="true"></div>
+        <div class="map-reticle" aria-hidden="true"></div>
+        <div class="mission-ribbon" id="missionRibbon">
+          <strong>Preflight edge approval required</strong>
+          <span>Analyze route, approve stationary relays, then start the live simulation.</span>
+        </div>
+        <div class="map-hud">
+          <div><span id="routeDistance">--</span><small>route</small></div>
+          <div><span id="hudPhase">Preflight</span><small>status</small></div>
+          <div><span id="hudDrones">--</span><small>air assets</small></div>
+          <div><span id="hudThreats">--</span><small>vectors</small></div>
+        </div>
+        <div class="layer-bar">
+          <button class="layer active" type="button" data-layer="vectors">Vectors</button>
+          <button class="layer active" type="button" data-layer="search">Search</button>
+          <button class="layer active" type="button" data-layer="links">Links</button>
+          <button class="layer active" type="button" data-layer="detections">Detections</button>
+        </div>
+        <div class="camera-bar">
+          <button class="mode active" type="button" data-camera="follow">Follow</button>
+          <button class="mode" type="button" data-camera="fit">Fit</button>
+          <button class="mode" type="button" data-camera="free">Free</button>
+        </div>
+        <div id="rerouteWarning" class="reroute-warning">
+          <span class="warning-symbol">!</span>
+          <div>
+            <strong>Auto reroute pending</strong>
+            <small id="rerouteWarningText">Fused drone detection triggered route adaptation.</small>
+          </div>
+        </div>
+        <div id="timelineStrip" class="timeline-strip">
+          <span class="timeline-empty">Awaiting live telemetry.</span>
+        </div>
       </section>
-      <section class="panel-block">
-        <h2>Sensing And Decisions</h2>
-        <div id="decisionList" class="decision-list"></div>
-      </section>
-      <section class="panel-block">
-        <h2>Live Offload</h2>
-        <div id="eventList" class="event-list"></div>
-      </section>
-      <div id="message" class="message"></div>
-    </aside>
-  </main>
+
+      <aside class="tactical-rail">
+        <section class="panel-block preflight">
+          <div class="rail-heading">
+            <h2>Preflight Approval</h2>
+            <span class="rail-callout" id="approvalCallout">pending</span>
+          </div>
+          <div id="preflightSummary" class="summary">Analyze a route to review edge recommendations.</div>
+          <div class="button-row">
+            <button id="approveAllButton" type="button" class="secondary">Approve All</button>
+            <button id="startButton" type="button">Start Simulation</button>
+          </div>
+        </section>
+
+        <nav class="rail-tabs" aria-label="Tactical panels">
+          <button class="active" type="button" data-panel="edges">Edges</button>
+          <button type="button" data-panel="vectors">Vectors</button>
+          <button type="button" data-panel="decisions">Drones</button>
+          <button type="button" data-panel="reroutes">Reroute</button>
+          <button type="button" data-panel="events">Events</button>
+        </nav>
+
+        <section class="panel-block active" data-panel-content="edges">
+          <h2>Edge Approval Queue</h2>
+          <div id="edgeList" class="edge-list"></div>
+        </section>
+        <section class="panel-block" data-panel-content="vectors">
+          <h2>Synthetic Attack Vectors</h2>
+          <div id="vectorList" class="vector-list"></div>
+        </section>
+        <section class="panel-block" data-panel-content="decisions">
+          <h2>Sensing And Decisions</h2>
+          <div id="decisionList" class="decision-list"></div>
+        </section>
+        <section class="panel-block" data-panel-content="reroutes">
+          <h2>Auto Reroute</h2>
+          <div id="rerouteList" class="reroute-list"></div>
+        </section>
+        <section class="panel-block" data-panel-content="events">
+          <h2>Live Offload</h2>
+          <div id="eventList" class="event-list"></div>
+        </section>
+        <div id="message" class="message"></div>
+      </aside>
+    </main>
+  </div>
 
   <script src="/static/realworld-tempVisualizer/app.js"></script>
 </body>

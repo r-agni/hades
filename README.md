@@ -30,6 +30,11 @@ temporary `/viz` presentation with scripted contacts, jamming, and callouts. For
 track development or non-visual consumers, run with `HADES_PUBLISHER_MODE=synthetic`
 to use the reusable synthetic publisher without demo choreography.
 
+OpenAI API use is disabled by default. If optional explanation features are
+enabled later, configure `HADES_OPENAI_ENABLED=1` and keep `OPENAI_MODEL` on a
+lightweight model such as `gpt-4.1-mini` unless a larger model is explicitly
+needed.
+
 ## Layout
 
 - `hades/config.py` and `hades/state.py` define shared constants and the stable
