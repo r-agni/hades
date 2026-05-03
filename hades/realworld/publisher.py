@@ -346,7 +346,7 @@ class RealWorldSimPublisher:
             sector_center = float(parent_plan["route_distance_m"])
             slot_center = (slot - (children_per_parent - 1) / 2.0) * 115.0
             along_sweep = math.sin(t * 0.31 + idx * 0.83) * 95.0
-            patrol_distance = (sector_center + slot_center + along_sweep) % max(1.0, route_length_m)
+            patrol_distance = _clamp_route_distance(sector_center + slot_center + along_sweep, route_length_m)
             route_point, local_heading = sample_route(self.route_points, self.route_distances, patrol_distance)
             side = -1.0 if (slot + sector) % 2 == 0 else 1.0
             lane = 78.0 + (slot % children_per_parent) * 38.0
@@ -982,7 +982,7 @@ class RealWorldSimPublisher:
         }
 
     def _route_distance_at(self, t: float, route_length_m: float) -> float:
-        return ((t * self.route_speed_mps) + self._route_distance_offset_m) % max(1.0, route_length_m)
+        return _clamp_route_distance((t * self.route_speed_mps) + self._route_distance_offset_m, route_length_m)
 
     def _edge_support_plan(
         self,
@@ -999,7 +999,7 @@ class RealWorldSimPublisher:
         for idx in range(self.parent_count):
             sector_offset = (idx - (self.parent_count - 1) / 2.0) * sector_span * 0.62 + 175.0
             sweep = math.sin(route_distance_m * 0.003 + idx * 1.31) * sector_span * 0.2
-            desired_distance = (route_distance_m + sector_offset + sweep) % max(1.0, route_length_m)
+            desired_distance = _clamp_route_distance(route_distance_m + sector_offset + sweep, route_length_m)
             if mission["active"] and idx == mission_sector:
                 desired_distance = mission_distance
             anchor = self._best_edge_anchor(anchors, desired_distance, route_length_m)
@@ -1018,9 +1018,10 @@ class RealWorldSimPublisher:
                     1,
                 )
                 if edge_anchor_distance_m <= max(520.0, self.wifi_radius_m * 3.5):
-                    desired_distance = (
-                        desired_distance * 0.58 + float(anchor["route_distance_m"]) * 0.42
-                    ) % max(1.0, route_length_m)
+                    desired_distance = _clamp_route_distance(
+                        desired_distance * 0.58 + float(anchor["route_distance_m"]) * 0.42,
+                        route_length_m,
+                    )
                     pattern = "edge_anchor_sector_sweep"
             parent_plans.append(
                 {
@@ -1144,8 +1145,11 @@ def _limit_from_anchor(anchor: LatLng, point: LatLng, max_distance_m: float) -> 
 
 
 def _route_delta(a: float, b: float, route_length_m: float) -> float:
-    direct = abs(a - b)
-    return min(direct, max(0.0, route_length_m - direct))
+    return abs(a - b)
+
+
+def _clamp_route_distance(distance_m: float, route_length_m: float) -> float:
+    return max(0.0, min(max(1.0, route_length_m), distance_m))
 
 
 def _serializable_edge_plan(edge_plan: dict[str, object]) -> dict[str, object]:
