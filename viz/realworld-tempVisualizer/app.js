@@ -6,7 +6,9 @@
   const FOLLOW_MAX_ZOOM = 15;
   const FOLLOW_ACTIVE_MAX_ZOOM = 13;
   const FOLLOW_MIN_ZOOM = 11;
+  const FOLLOW_LOCK_ZOOM = 15;
   const FOLLOW_CAMERA_INTERVAL_MS = 450;
+  const MOTION_SMOOTH_MS = 220;
   const TACTICAL_MAP_STYLES = [
     { featureType: 'all', elementType: 'labels.text.fill', stylers: [{ color: '#d7fbff' }] },
     { featureType: 'all', elementType: 'labels.text.stroke', stylers: [{ color: '#071012' }, { weight: 3 }] },
@@ -29,12 +31,18 @@
     setupCollapsed: false,
     presentation: new URLSearchParams(window.location.search).get('presentation') === '1',
     layers: {
+      routeScore: true,
+      terrain: true,
+      feasibility: true,
+      candidates: true,
+      data: true,
       vectors: true,
       search: true,
       links: true,
       detections: true,
     },
     lastFollowCameraAt: 0,
+    lastRouteRevision: null,
     rerouteRequested: false,
     autoRerouteTimer: null,
     autoRerouteCooldownUntil: 0,
@@ -42,7 +50,12 @@
       route: null,
       routeBase: null,
       routeProgress: null,
+      routeScore: null,
       gaps: [],
+      terrain: [],
+      candidateZones: new Map(),
+      feasibilityZones: new Map(),
+      dataMarkers: new Map(),
       edges: new Map(),
       edgeRings: new Map(),
       drones: new Map(),
@@ -52,6 +65,7 @@
       targets: new Map(),
       vectors: new Map(),
       vectorCorridors: new Map(),
+      vectorMarkers: new Map(),
       detections: [],
       edgeSupport: [],
       searchCells: [],
@@ -74,6 +88,7 @@
     start: document.getElementById('startButton'),
     approveAll: document.getElementById('approveAllButton'),
     routeDistance: document.getElementById('routeDistance'),
+    routeScore: document.getElementById('routeScore'),
     coveragePct: document.getElementById('coveragePct'),
     streamTime: document.getElementById('streamTime'),
     computeMode: document.getElementById('computeMode'),
@@ -90,6 +105,9 @@
     presentationToggle: document.getElementById('presentationToggle'),
     approvalCallout: document.getElementById('approvalCallout'),
     preflightSummary: document.getElementById('preflightSummary'),
+    plannerList: document.getElementById('plannerList'),
+    conditionList: document.getElementById('conditionList'),
+    sourceList: document.getElementById('sourceList'),
     edgeList: document.getElementById('edgeList'),
     vectorList: document.getElementById('vectorList'),
     decisionList: document.getElementById('decisionList'),
@@ -103,7 +121,7 @@
   function boot() {
     setPresentationMode(state.presentation);
     setSetupCollapsed(state.presentation);
-    setActivePanel(state.presentation ? 'decisions' : 'edges');
+    setActivePanel('planner');
     fetch('/api/realworld/config')
       .then(assertOk)
       .then(function (config) {
@@ -387,12 +405,14 @@
     const analysis = scenario.analysis;
     els.routeDistance.textContent = formatMeters(scenario.route.distance_m);
     els.coveragePct.textContent = analysis.coverage_percent.toFixed(1) + '%';
+    if (els.routeScore) els.routeScore.textContent = routeScoreLabel(analysis.route_score);
     updateMissionFromScenario(scenario);
     renderPreflight(scenario);
 
     if (state.overlays.routeBase) state.overlays.routeBase.setMap(null);
     if (state.overlays.route) state.overlays.route.setMap(null);
     if (state.overlays.routeProgress) state.overlays.routeProgress.setMap(null);
+    if (state.overlays.routeScore) state.overlays.routeScore.setMap(null);
     state.overlays.routeBase = new google.maps.Polyline({
       map: state.map,
       path: route,
@@ -419,6 +439,14 @@
       strokeOpacity: 0.96,
       strokeWeight: 6,
     });
+    state.overlays.routeScore = new google.maps.Polyline({
+      map: state.layers.routeScore ? state.map : null,
+      path: route,
+      strokeColor: scoreColor((analysis.route_score && analysis.route_score.overall) || 0),
+      strokeOpacity: 0.52,
+      strokeWeight: 10,
+      zIndex: 12,
+    });
 
     state.overlays.gaps.forEach(function (gap) { gap.setMap(null); });
     state.overlays.gaps = analysis.coverage_gaps.map(function (gap) {
@@ -444,6 +472,11 @@
     }
 
     renderEdges(analysis.edges, scenario.settings.wifi_radius_m);
+    renderCandidateZones(analysis.candidate_zones || [], scenario.settings.wifi_radius_m);
+    renderTerrainLayer((analysis.live_conditions && analysis.live_conditions.terrain) || null);
+    renderDataAvailability(analysis);
+    renderPlanning(scenario);
+    renderConditions(analysis);
     renderEdgeList(analysis.edges);
     renderVectors(analysis.attack_vectors || []);
     renderReroutes(analysis.reroute_proposals || []);
@@ -464,6 +497,169 @@
     }
     els.start.disabled = !p.can_start || p.started;
     els.start.textContent = p.started ? 'Running' : 'Start Simulation';
+  }
+
+  function renderPlanning(scenario) {
+    if (!els.plannerList) return;
+    const analysis = scenario.analysis || {};
+    const score = analysis.route_score || {};
+    const deploy = analysis.edge_deployability || {};
+    const zones = analysis.candidate_zones || [];
+    const approved = (analysis.edges || []).filter(function (edge) {
+      return edge.status === 'approved' || edge.status === 'moved';
+    }).length;
+    const factors = score.factors || [];
+    const narrative = decisionNarrative(score, deploy, zones, approved);
+    els.plannerList.innerHTML =
+      '<div class="card">' +
+        '<div class="card-head"><span class="card-id">route score</span>' +
+        '<span class="pill ' + scorePill(score.overall || 0) + '">' + routeScoreLabel(score) + '</span></div>' +
+        '<div class="metric"><span>Grade</span><strong>' + esc(score.grade || 'pending') + '</strong></div>' +
+        '<div class="metric"><span>Stationary Plan</span><strong>' + esc(deploy.summary || 'Candidate zones pending') + '</strong></div>' +
+        '<div class="metric"><span>Approved Fixed</span><strong>' + approved + ' active / convoy edges after start</strong></div>' +
+        '<div class="reason">' + esc(narrative) + '</div>' +
+      '</div>' +
+      factors.map(function (factor) {
+        const pct = Math.round((factor.score || 0) * 100);
+        return '<div class="card">' +
+          '<div class="card-head"><span class="card-id">' + esc(factor.label) + '</span>' +
+          '<span class="pill ' + scorePill(pct) + '">' + pct + '%</span></div>' +
+          '<div class="metric"><span>Source</span><strong>' + esc(factor.status || 'derived') + '</strong></div>' +
+          '<div class="reason">' + esc(factor.detail || '') + '</div>' +
+          '<div class="factor-bar"><span style="width:' + Math.max(2, pct) + '%"></span></div>' +
+        '</div>';
+      }).join('');
+  }
+
+  function renderConditions(analysis) {
+    if (!els.conditionList || !els.sourceList) return;
+    const live = analysis.live_conditions || {};
+    const terrain = live.terrain || {};
+    const weather = live.weather || {};
+    const traffic = live.traffic || {};
+    const roads = live.road_context || {};
+    els.conditionList.innerHTML =
+      conditionCard('weather', weather.available ? weather.summary : 'Weather unavailable', [
+        ['Temp', weather.temperature_c == null ? '--' : weather.temperature_c.toFixed(1) + ' C'],
+        ['Wind', weather.wind_speed_kmh == null ? '--' : weather.wind_speed_kmh.toFixed(0) + ' km/h'],
+        ['Precip', weather.precipitation_mm == null ? '--' : weather.precipitation_mm.toFixed(1) + ' mm'],
+      ]) +
+      conditionCard('traffic', traffic.summary || 'Traffic unavailable', [
+        ['Delay', traffic.delay_ratio == null ? '--' : Math.round(traffic.delay_ratio * 100) + '%'],
+        ['Intervals', String(traffic.speed_interval_count || 0)],
+      ]) +
+      conditionCard('terrain', 'Slope and elevation derived from Google Elevation', [
+        ['Max slope', terrain.max_slope_pct == null ? '--' : terrain.max_slope_pct.toFixed(1) + '%'],
+        ['Avg slope', terrain.avg_slope_pct == null ? '--' : terrain.avg_slope_pct.toFixed(1) + '%'],
+        ['Gain', terrain.elevation_gain_m == null ? '--' : formatMeters(terrain.elevation_gain_m)],
+      ]) +
+      conditionCard('road context', roads.summary || 'Open map context unavailable', [
+        ['Intersections', String(roads.intersection_count || 0)],
+        ['Deployable hints', String(roads.deployable_hint_count || 0)],
+      ]);
+
+    els.sourceList.innerHTML = (analysis.data_sources || []).map(function (source) {
+      return '<div class="card">' +
+        '<div class="card-head"><span class="card-id">' + esc(source.label || source.key) + '</span>' +
+        '<span class="source-state ' + esc(source.state || 'unavailable') + '">' + esc(source.state || 'unavailable') + '</span></div>' +
+        '<div class="reason">' + esc(source.summary || '') + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function conditionCard(title, summary, metrics) {
+    return '<div class="card">' +
+      '<div class="card-head"><span class="card-id">' + esc(title) + '</span></div>' +
+      metrics.map(function (item) {
+        return '<div class="metric"><span>' + esc(item[0]) + '</span><strong>' + esc(item[1]) + '</strong></div>';
+      }).join('') +
+      '<div class="reason">' + esc(summary || '') + '</div>' +
+    '</div>';
+  }
+
+  function renderCandidateZones(zones, radius) {
+    const seen = new Set();
+    zones.forEach(function (zone) {
+      seen.add(zone.id);
+      const pos = { lat: zone.lat, lng: zone.lng };
+      const color = zoneColor(zone);
+      let marker = state.overlays.candidateZones.get(zone.id);
+      if (!marker) {
+        marker = new google.maps.Circle({ clickable: true, strokeWeight: 1 });
+        marker.addListener('click', function () { showZoneInfo(marker.__zone || zone, marker); });
+        state.overlays.candidateZones.set(zone.id, marker);
+      }
+      marker.__zone = zone;
+      marker.setOptions({
+        map: state.layers.candidates ? state.map : null,
+        center: pos,
+        radius: Math.max(48, Math.min(radius * 0.72, 120)),
+        strokeColor: color,
+        strokeOpacity: zone.status === 'rejected' ? 0.38 : 0.74,
+        fillColor: color,
+        fillOpacity: zone.status === 'rejected' ? 0.035 : 0.075,
+      });
+
+      let heat = state.overlays.feasibilityZones.get(zone.id);
+      if (!heat) {
+        heat = new google.maps.Circle({ clickable: false, strokeWeight: 0 });
+        state.overlays.feasibilityZones.set(zone.id, heat);
+      }
+      heat.setOptions({
+        map: state.layers.feasibility ? state.map : null,
+        center: pos,
+        radius: Math.max(90, Math.min(radius * 1.3, 230)),
+        fillColor: color,
+        fillOpacity: Math.max(0.025, Math.min(0.16, (zone.feasibility_score || 0.4) * 0.14)),
+        strokeOpacity: 0,
+      });
+    });
+    deleteMissing(state.overlays.candidateZones, seen);
+    deleteMissing(state.overlays.feasibilityZones, seen);
+  }
+
+  function renderTerrainLayer(terrain) {
+    clearOverlayArray('terrain');
+    if (!state.layers.terrain || !terrain || !terrain.segments) return;
+    terrain.segments.forEach(function (segment) {
+      state.overlays.terrain.push(new google.maps.Polyline({
+        map: state.map,
+        path: [segment.start, segment.end],
+        strokeColor: terrainColor(segment.severity),
+        strokeOpacity: segment.severity === 'low' ? 0.28 : 0.72,
+        strokeWeight: segment.severity === 'steep' ? 7 : 4,
+        zIndex: 14,
+      }));
+    });
+  }
+
+  function renderDataAvailability(analysis) {
+    const sources = analysis.data_sources || [];
+    const seen = new Set();
+    if (!state.scenario || !state.scenario.route || !state.scenario.route.samples) return;
+    const samples = state.scenario.route.samples;
+    sources.forEach(function (source, idx) {
+      const sample = samples[Math.min(samples.length - 1, Math.floor((idx + 1) / (sources.length + 1) * samples.length))];
+      if (!sample) return;
+      seen.add(source.key);
+      let marker = state.overlays.dataMarkers.get(source.key);
+      if (!marker) {
+        marker = new google.maps.Marker({ clickable: true, zIndex: 74 });
+        marker.addListener('click', function () {
+          state.info.setContent('<div class="info"><strong>' + esc(source.label || source.key) + '</strong><br>' + esc(source.state || '') + '<br>' + esc(source.summary || '') + '</div>');
+          state.info.open({ map: state.map, anchor: marker });
+        });
+        state.overlays.dataMarkers.set(source.key, marker);
+      }
+      marker.setOptions({
+        map: state.layers.data ? state.map : null,
+        position: sample,
+        label: { text: String(idx + 1), color: '#061012', fontSize: '10px', fontWeight: '900' },
+        icon: dataSourceIcon(source.state),
+        title: source.label || source.key,
+      });
+    });
+    deleteMissing(state.overlays.dataMarkers, seen);
   }
 
   function renderEdges(edges, radius) {
@@ -547,6 +743,7 @@
 
   function renderFrame(frame) {
     els.streamTime.textContent = frame.t.toFixed(1) + 's';
+    resetLiveMotionOnRouteRevision(frame);
     updateMissionFromFrame(frame);
     updateRouteProgress(frame);
     renderLiveEdges(frame.edges || [], state.scenario.settings.wifi_radius_m);
@@ -579,7 +776,7 @@
         });
         state.overlays.edges.set(edge.id, marker);
       }
-      marker.setPosition(pos);
+      smoothOverlayPosition(marker, pos, 'setPosition', 'getPosition', MOTION_SMOOTH_MS);
       marker.setIcon(edgeIcon(edge.status, edge.edge_type));
       let ring = state.overlays.edgeRings.get(edge.id);
       if (!ring) {
@@ -588,7 +785,7 @@
       }
       const col = edgeColor(edge.status, edge.edge_type);
       ring.setOptions({ strokeColor: col, fillColor: col, strokeOpacity: 0.28, fillOpacity: 0.04 });
-      ring.setCenter(pos);
+      smoothOverlayPosition(ring, pos, 'setCenter', 'getCenter', MOTION_SMOOTH_MS);
       ring.setRadius(radius);
     });
   }
@@ -619,7 +816,7 @@
         fillOpacity: drone.tier === 'PARENT' ? 0.038 : 0.022,
         strokeWeight: drone.tier === 'PARENT' ? 2 : 1,
       });
-      fov.setCenter(drone.geo);
+      smoothOverlayPosition(fov, drone.geo, 'setCenter', 'getCenter', MOTION_SMOOTH_MS);
       fov.setRadius(drone.capabilities.vision_radius_m);
     });
     deleteMissing(state.overlays.drones, droneIds);
@@ -666,10 +863,13 @@
       state.overlays.vectors.clear();
       state.overlays.vectorCorridors.forEach(function (corridor) { corridor.setMap(null); });
       state.overlays.vectorCorridors.clear();
+      state.overlays.vectorMarkers.forEach(function (marker) { marker.setMap(null); });
+      state.overlays.vectorMarkers.clear();
       renderVectorList(vectors);
       return;
     }
-    vectors.forEach(function (vector) {
+    vectors.forEach(function (vector, idx) {
+      if (!vector.start || !vector.end) return;
       ids.add(vector.id);
       const corridorColor = vector.type === 'synthetic_gap_pressure' ? '#efbf55' : '#ff625d';
       let corridor = state.overlays.vectorCorridors.get(vector.id);
@@ -682,13 +882,16 @@
           strokeWeight: 1,
           fillColor: corridorColor,
           fillOpacity: Math.max(0.06, Math.min(0.18, (vector.risk || 0.35) * 0.18)),
+          zIndex: 34,
         });
         state.overlays.vectorCorridors.set(vector.id, corridor);
       }
       corridor.setOptions({
+        map: state.map,
         strokeColor: corridorColor,
         fillColor: corridorColor,
         fillOpacity: Math.max(0.06, Math.min(0.18, (vector.risk || 0.35) * 0.18)),
+        zIndex: 34,
       });
       corridor.setPath(corridorPath(vector.start, vector.end, vector.width_m || 160));
       let line = state.overlays.vectors.get(vector.id);
@@ -698,6 +901,7 @@
           strokeColor: corridorColor,
           strokeOpacity: 0.76,
           strokeWeight: Math.max(3, Math.min(8, (vector.width_m || 160) / 45)),
+          zIndex: 86,
           icons: [{
             icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 3.4, strokeColor: corridorColor },
             offset: '72%',
@@ -707,7 +911,11 @@
         state.overlays.vectors.set(vector.id, line);
       }
       line.setOptions({
+        map: state.map,
         strokeColor: corridorColor,
+        strokeOpacity: vector.type === 'synthetic_gap_pressure' ? 0.78 : 0.9,
+        strokeWeight: Math.max(4, Math.min(9, (vector.width_m || 160) / 38)),
+        zIndex: 86,
         icons: [{
           icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 3.4, strokeColor: corridorColor },
           offset: '72%',
@@ -715,9 +923,28 @@
         }],
       });
       line.setPath([vector.start, vector.end]);
+
+      let marker = state.overlays.vectorMarkers.get(vector.id);
+      if (!marker) {
+        marker = new google.maps.Marker({
+          clickable: true,
+          zIndex: 112,
+        });
+        marker.addListener('click', function () { showVectorInfo(marker.__vector || vector, marker); });
+        state.overlays.vectorMarkers.set(vector.id, marker);
+      }
+      marker.__vector = vector;
+      marker.setOptions({
+        map: state.map,
+        position: vector.end,
+        icon: vectorIcon(vector),
+        label: { text: 'V' + (idx + 1), color: '#ffffff', fontSize: '10px', fontWeight: '900' },
+        title: vector.id,
+      });
     });
     deleteMissing(state.overlays.vectors, ids);
     deleteMissing(state.overlays.vectorCorridors, ids);
+    deleteMissing(state.overlays.vectorMarkers, ids);
     renderVectorList(vectors);
   }
 
@@ -876,9 +1103,10 @@
         '<div class="metric"><span>Location</span><strong>' + edge.lat.toFixed(5) + ', ' + edge.lng.toFixed(5) + '</strong></div>' +
         '<div class="metric"><span>Latency</span><strong>' + edge.avg_latency_ms.toFixed(1) + ' ms</strong></div>' +
         '<div class="metric"><span>Access</span><strong>' + (edge.nearest_road_distance_m == null ? 'unverified' : edge.nearest_road_distance_m.toFixed(0) + ' m') + '</strong></div>' +
+        '<div class="metric"><span>Feasibility</span><strong>' + Math.round((edge.feasibility_score || 0) * 100) + '% / ' + esc(edge.deployability_class || 'medium') + '</strong></div>' +
         '<div class="metric"><span>Elevation</span><strong>' + edge.elevation_advantage_m.toFixed(1) + ' m</strong></div>' +
         '<div class="metric"><span>Redundancy</span><strong>' + Math.round(edge.redundancy_contribution * 100) + '%</strong></div>' +
-        '<div class="reason">' + esc(edge.reasons[0] || '') + '</div>' +
+        '<div class="reason">' + esc((edge.constraints || []).join(', ') || edge.reasons[0] || '') + '</div>' +
         '<div class="button-row mini">' +
           '<button type="button" data-edge-action="approve" data-edge-id="' + esc(edge.id) + '">Approve</button>' +
           '<button type="button" data-edge-action="reject" data-edge-id="' + esc(edge.id) + '" class="danger">Reject</button>' +
@@ -903,14 +1131,20 @@
 
   function renderVectorList(vectors) {
     els.vectorList.innerHTML = '';
+    if (!vectors.length) {
+      els.vectorList.innerHTML = '<div class="summary">No synthetic scenario vectors are active.</div>';
+      return;
+    }
     vectors.forEach(function (vector) {
       const card = document.createElement('div');
       card.className = 'card';
       card.innerHTML =
         '<div class="card-head"><span class="card-id">' + esc(vector.id) + '</span>' +
-        '<span class="pill warn">' + Math.round((vector.risk || 0) * 100) + '% risk</span></div>' +
+        '<span class="pill warn">' + Math.round((vector.risk || 0) * 100) + '% synthetic</span></div>' +
         '<div class="metric"><span>Type</span><strong>' + esc(vector.type) + '</strong></div>' +
-        '<div class="reason">' + esc(vector.explanation || '') + '</div>';
+        '<div class="metric"><span>Width</span><strong>' + formatMeters(vector.width_m || 0) + '</strong></div>' +
+        '<div class="metric"><span>Route Ref</span><strong>' + formatMeters(vector.route_distance_m || 0) + '</strong></div>' +
+        '<div class="reason">' + esc(vector.explanation || 'Synthetic scenario object; not live intelligence.') + '</div>';
       els.vectorList.appendChild(card);
     });
   }
@@ -945,7 +1179,8 @@
         '<div class="metric"><span>Risk</span><strong>' + Math.round(proposal.risk_score * 100) + '%</strong></div>' +
         '<div class="metric"><span>Edge</span><strong>' + Math.round((proposal.edge_coverage_score || 0) * 100) + '%</strong></div>' +
         '<div class="metric"><span>Connect</span><strong>' + Math.round((proposal.connectivity_score || 0) * 100) + '%</strong></div>' +
-        '<div class="metric"><span>Sensor</span><strong>' + Math.round((proposal.sensor_coverage_score || 0) * 100) + '%</strong></div>' +
+        '<div class="metric"><span>Terrain</span><strong>' + factorPercent(proposal.route_score, 'terrain_slope') + '</strong></div>' +
+        '<div class="metric"><span>Weather</span><strong>' + factorPercent(proposal.route_score, 'weather_visibility') + '</strong></div>' +
         '<div class="reason">' + esc((proposal.reasons || [])[0] || '') + '</div>' +
         '<div class="button-row mini"><button type="button" data-reroute-id="' + esc(proposal.id) + '">Apply Now</button></div>';
       els.rerouteList.appendChild(card);
@@ -970,13 +1205,48 @@
     });
   }
 
+  function resetLiveMotionOnRouteRevision(frame) {
+    const revision = frame.geo && frame.geo.route_revision;
+    if (revision == null) return;
+    if (state.lastRouteRevision === null) {
+      state.lastRouteRevision = revision;
+      return;
+    }
+    if (revision === state.lastRouteRevision) return;
+    state.lastRouteRevision = revision;
+    clearMarkerStore(state.overlays.drones);
+    clearMarkerStore(state.overlays.droneFov);
+    clearMarkerStore(state.overlays.convoy);
+    clearMatchingOverlays(state.overlays.edges, function (id) { return String(id).indexOf('convoy_edge_') === 0; });
+    clearMatchingOverlays(state.overlays.edgeRings, function (id) { return String(id).indexOf('convoy_edge_') === 0; });
+  }
+
+  function clearMarkerStore(store) {
+    store.forEach(function (overlay) {
+      if (overlay.__motionFrame) window.cancelAnimationFrame(overlay.__motionFrame);
+      overlay.setMap(null);
+    });
+    store.clear();
+  }
+
+  function clearMatchingOverlays(store, predicate) {
+    Array.from(store.keys()).forEach(function (id) {
+      if (!predicate(id)) return;
+      const overlay = store.get(id);
+      if (overlay.__motionFrame) window.cancelAnimationFrame(overlay.__motionFrame);
+      overlay.setMap(null);
+      store.delete(id);
+    });
+  }
+
   function upsertMarker(store, id, position, icon, zIndex) {
     let marker = store.get(id);
     if (!marker) {
       marker = new google.maps.Marker({ map: state.map, position: position, icon: icon, title: id, zIndex: zIndex });
+      marker.__motionPoint = plainLatLng(position);
       store.set(id, marker);
     }
-    marker.setPosition(position);
+    smoothOverlayPosition(marker, position, 'setPosition', 'getPosition', MOTION_SMOOTH_MS);
     marker.setIcon(icon);
     return marker;
   }
@@ -984,7 +1254,9 @@
   function deleteMissing(store, nextIds) {
     Array.from(store.keys()).forEach(function (id) {
       if (!nextIds.has(id)) {
-        store.get(id).setMap(null);
+        const overlay = store.get(id);
+        if (overlay.__motionFrame) window.cancelAnimationFrame(overlay.__motionFrame);
+        overlay.setMap(null);
         store.delete(id);
       }
     });
@@ -992,22 +1264,28 @@
 
   function clearScenario() {
     hideRerouteWarning();
+    state.lastRouteRevision = null;
     if (state.overlays.routeBase) state.overlays.routeBase.setMap(null);
     if (state.overlays.route) state.overlays.route.setMap(null);
     if (state.overlays.routeProgress) state.overlays.routeProgress.setMap(null);
+    if (state.overlays.routeScore) state.overlays.routeScore.setMap(null);
     state.overlays.routeBase = null;
     state.overlays.route = null;
     state.overlays.routeProgress = null;
+    state.overlays.routeScore = null;
     state.overlays.gaps.forEach(function (gap) { gap.setMap(null); });
     state.overlays.gaps = [];
-    ['edges', 'edgeRings', 'drones', 'droneFov', 'convoy', 'targets', 'vectors', 'vectorCorridors'].forEach(function (key) {
+    ['edges', 'edgeRings', 'drones', 'droneFov', 'convoy', 'targets', 'vectors', 'vectorCorridors', 'vectorMarkers', 'candidateZones', 'feasibilityZones', 'dataMarkers'].forEach(function (key) {
       state.overlays[key].forEach(function (overlay) { overlay.setMap(null); });
       state.overlays[key].clear();
     });
-    ['links', 'detections', 'edgeSupport', 'searchCells', 'reroutes'].forEach(function (key) {
+    ['links', 'detections', 'edgeSupport', 'searchCells', 'reroutes', 'terrain'].forEach(function (key) {
       state.overlays[key].forEach(function (overlay) { overlay.setMap(null); });
       state.overlays[key] = [];
     });
+    if (els.plannerList) els.plannerList.innerHTML = '';
+    if (els.conditionList) els.conditionList.innerHTML = '';
+    if (els.sourceList) els.sourceList.innerHTML = '';
     els.edgeList.innerHTML = '';
     els.vectorList.innerHTML = '';
     els.decisionList.innerHTML = '';
@@ -1020,7 +1298,31 @@
     const html =
       '<div class="info"><strong>' + esc(edge.id) + '</strong><br>' +
       'Status: ' + esc(edge.status) + '<br>' +
+      'Feasibility: ' + Math.round((edge.feasibility_score || 0) * 100) + '% ' + esc(edge.deployability_class || '') + '<br>' +
       edge.reasons.map(esc).join('<br>') + '</div>';
+    state.info.setContent(html);
+    state.info.open({ map: state.map, anchor: marker });
+  }
+
+  function showZoneInfo(zone, overlay) {
+    const html =
+      '<div class="info"><strong>' + esc(zone.id) + '</strong><br>' +
+      'Status: ' + esc(zone.status || 'candidate') + '<br>' +
+      'Deployability: ' + Math.round((zone.feasibility_score || 0) * 100) + '% ' + esc(zone.deployability_class || '') + '<br>' +
+      'Access: ' + (zone.nearest_road_distance_m == null ? 'unverified' : Math.round(zone.nearest_road_distance_m) + ' m') + '<br>' +
+      esc((zone.constraints || []).join(', ')) + '</div>';
+    state.info.setContent(html);
+    state.info.setPosition(overlay.getCenter());
+    state.info.open({ map: state.map });
+  }
+
+  function showVectorInfo(vector, marker) {
+    const html =
+      '<div class="info"><strong>' + esc(vector.id) + '</strong><br>' +
+      'Type: ' + esc(vector.type || 'synthetic_vector') + '<br>' +
+      'Synthetic risk: ' + Math.round((vector.risk || 0) * 100) + '%<br>' +
+      'Width: ' + formatMeters(vector.width_m || 0) + '<br>' +
+      esc(vector.explanation || 'Synthetic scenario object; not live intelligence.') + '</div>';
     state.info.setContent(html);
     state.info.open({ map: state.map, anchor: marker });
   }
@@ -1039,7 +1341,7 @@
     }
     if (state.presentation) {
       setSetupCollapsed(true);
-      setActivePanel('decisions');
+      setActivePanel('planner');
     }
   }
 
@@ -1061,6 +1363,14 @@
     });
     if (!state.scenario) return;
     if (layer === 'vectors') renderVectors(state.scenario.analysis.attack_vectors || []);
+    if (layer === 'routeScore' && state.overlays.routeScore) {
+      state.overlays.routeScore.setMap(state.layers.routeScore ? state.map : null);
+    }
+    if (layer === 'terrain') renderTerrainLayer((state.scenario.analysis.live_conditions && state.scenario.analysis.live_conditions.terrain) || null);
+    if (layer === 'candidates' || layer === 'feasibility') {
+      renderCandidateZones(state.scenario.analysis.candidate_zones || [], state.scenario.settings.wifi_radius_m);
+    }
+    if (layer === 'data') renderDataAvailability(state.scenario.analysis);
     if (layer === 'links') clearOverlayArray('links');
     if (layer === 'detections') clearOverlayArray('detections');
     if (layer === 'search') clearOverlayArray('searchCells');
@@ -1095,13 +1405,7 @@
     if (now - state.lastFollowCameraAt < FOLLOW_CAMERA_INTERVAL_MS) return;
     state.lastFollowCameraAt = now;
 
-    const bounds = new google.maps.LatLngBounds();
-    const points = [lead.geo];
-    (frame.convoy || []).forEach(function (vehicle) { points.push(vehicle.geo); });
-
-    const ahead = routeAheadPoint(lead.route_progress_pct || 0, frame.reroute && frame.reroute.recommended ? 1.0 : 2.4);
-    if (ahead) points.push(ahead);
-
+    const ahead = routeAheadPoint(lead.route_progress_pct || 0, frame.reroute && frame.reroute.recommended ? 1.4 : 2.2);
     const activeVectorId = frame.reroute && frame.reroute.active_vector_id;
     let activeVector = null;
     if (activeVectorId && frame.geo && frame.geo.attack_vectors) {
@@ -1109,30 +1413,15 @@
         return candidate.id === activeVectorId;
       });
     }
-    if (activeVector && activeVector.end) points.push(activeVector.end);
 
-    const anchor = activeEdgeAnchor(frame);
-    if (anchor) points.push(anchor);
-
-    (frame.drones || []).forEach(function (drone) { points.push(drone.geo); });
-
-    points.forEach(function (point) { bounds.extend(point); });
-    if (points.length <= 1) {
-      state.map.panTo(lead.geo);
-      return;
+    let center = ahead ? blendLatLng(lead.geo, ahead, 0.62) : lead.geo;
+    if (activeVector && activeVector.end) {
+      center = blendLatLng(center, activeVector.end, 0.18);
     }
-    state.map.fitBounds(bounds, {
-      top: 92,
-      right: 420,
-      bottom: 72,
-      left: 72,
-    });
-    const maxZoom = activeVector ? FOLLOW_ACTIVE_MAX_ZOOM : FOLLOW_MAX_ZOOM;
-    window.setTimeout(function () {
-      const zoom = state.map.getZoom() || maxZoom;
-      if (zoom > maxZoom) state.map.setZoom(maxZoom);
-      else if (zoom < FOLLOW_MIN_ZOOM) state.map.setZoom(FOLLOW_MIN_ZOOM);
-    }, 0);
+    if ((state.map.getZoom() || 0) !== FOLLOW_LOCK_ZOOM) {
+      state.map.setZoom(FOLLOW_LOCK_ZOOM);
+    }
+    state.map.panTo(center);
   }
 
   function updateMissionFromScenario(scenario) {
@@ -1140,9 +1429,11 @@
     const destination = scenario.destination && scenario.destination.label ? scenario.destination.label : els.destination.value;
     const routeLabel = shortLabel(origin) + ' > ' + shortLabel(destination);
     const vectors = (scenario.analysis && scenario.analysis.attack_vectors) || [];
+    const score = scenario.analysis && scenario.analysis.route_score;
     const phase = scenario.preflight && scenario.preflight.started ? 'Running' : 'Preflight';
     if (els.missionRoute) els.missionRoute.textContent = routeLabel;
     if (els.missionPhase) els.missionPhase.textContent = phase + ' / ' + cameraLabel(state.cameraMode);
+    if (els.routeScore) els.routeScore.textContent = routeScoreLabel(score);
     if (els.activeRisk) els.activeRisk.textContent = riskLabel(maxVectorRisk(vectors));
     if (els.hudPhase) els.hudPhase.textContent = cameraLabel(state.cameraMode);
     if (els.hudDrones) {
@@ -1151,10 +1442,10 @@
     }
     if (els.hudThreats) els.hudThreats.textContent = String(vectors.length);
     updateMissionRibbon(
-      phase === 'Running' ? 'Live defense simulation running' : 'Preflight edge approval required',
+      phase === 'Running' ? 'Live data-aware route protection' : 'Data-aware preflight planning',
       phase === 'Running'
-        ? 'Convoy edges are active; approved stationary relays are supporting drone fusion.'
-        : 'Analyze route, approve stationary relays, then start the live simulation.'
+        ? 'Convoy edges are active; approved fixed sites, terrain, road context, and weather are informing route posture.'
+        : ((score && score.summary) || 'Review route score, live/context data, and sparse edge candidate zones before approval.')
     );
   }
 
@@ -1174,6 +1465,7 @@
     if (els.hudDrones) els.hudDrones.textContent = parents + 'P / ' + smalls + 'S';
     if (els.hudThreats) els.hudThreats.textContent = vectors.length + ' / ' + tracks.length;
     if (els.activeRisk) els.activeRisk.textContent = riskLabel(maxVectorRisk(vectors));
+    if (els.routeScore && state.scenario) els.routeScore.textContent = routeScoreLabel(state.scenario.analysis.route_score);
     if (els.computeMode && edgeTracks) els.computeMode.textContent = edgeTracks + ' edge fused';
     if (recommended) {
       updateMissionRibbon('Auto reroute warning active', 'Fused drone track exceeded threshold; route adaptation is being applied live.');
@@ -1285,6 +1577,46 @@
     return Math.round(risk * 100) + '%';
   }
 
+  function routeScoreLabel(score) {
+    if (!score || score.overall == null) return '--';
+    return Math.round(score.overall) + ' ' + String(score.grade || '').toUpperCase();
+  }
+
+  function scorePill(value) {
+    const numeric = Number(value || 0);
+    if (numeric >= 72) return 'edge';
+    if (numeric >= 48) return 'warn';
+    return 'track';
+  }
+
+  function scoreColor(score) {
+    const numeric = Number(score || 0);
+    if (numeric >= 72) return '#45d483';
+    if (numeric >= 48) return '#efbf55';
+    return '#ff625d';
+  }
+
+  function factorPercent(routeScore, key) {
+    const factors = routeScore && routeScore.factor_scores;
+    if (!factors || factors[key] == null) return '--';
+    return Math.round(factors[key] * 100) + '%';
+  }
+
+  function decisionNarrative(score, deploy, zones, approvedCount) {
+    const weak = ((score && score.factors) || []).slice().sort(function (a, b) {
+      return (a.score || 0) - (b.score || 0);
+    }).slice(0, 2).map(function (factor) { return factor.label; });
+    const zoneText = zones.length ? zones.length + ' candidate zones visible before approval' : 'candidate zones pending';
+    const approvalText = approvedCount ? approvedCount + ' approved fixed sites support scoring' : 'fixed sites do not support scoring until approved';
+    return [
+      score && score.summary ? score.summary : 'Planner score pending.',
+      zoneText,
+      approvalText,
+      deploy && deploy.summary ? deploy.summary : '',
+      weak.length ? 'Watch: ' + weak.join(', ') + '.' : '',
+    ].filter(Boolean).join(' ');
+  }
+
   function formatMeters(meters) {
     return meters >= 1000 ? (meters / 1000).toFixed(2) + ' km' : Math.round(meters) + ' m';
   }
@@ -1326,6 +1658,68 @@
     return samples[idx];
   }
 
+  function blendLatLng(a, b, amount) {
+    const u = Math.max(0, Math.min(1, amount));
+    return {
+      lat: a.lat + (b.lat - a.lat) * u,
+      lng: a.lng + (b.lng - a.lng) * u,
+    };
+  }
+
+  function smoothOverlayPosition(overlay, target, setterName, getterName, durationMs) {
+    const next = plainLatLng(target);
+    if (!next) return;
+    if (!overlay.__motionPoint) {
+      const current = typeof overlay[getterName] === 'function' ? overlay[getterName]() : null;
+      overlay.__motionPoint = plainLatLng(current) || next;
+      overlay[setterName](next);
+      return;
+    }
+    const from = overlay.__motionPoint;
+    const distance = latLngDeltaMeters(from, next);
+    if (distance < 0.25) {
+      overlay.__motionPoint = next;
+      overlay[setterName](next);
+      return;
+    }
+    if (overlay.__motionFrame) window.cancelAnimationFrame(overlay.__motionFrame);
+    const start = window.performance ? window.performance.now() : Date.now();
+    const duration = Math.max(80, durationMs || MOTION_SMOOTH_MS);
+    function step(now) {
+      const elapsed = now - start;
+      const t = Math.max(0, Math.min(1, elapsed / duration));
+      const eased = t * t * (3 - 2 * t);
+      const point = blendLatLng(from, next, eased);
+      overlay.__motionPoint = point;
+      overlay[setterName](point);
+      if (t < 1) {
+        overlay.__motionFrame = window.requestAnimationFrame(step);
+      } else {
+        overlay.__motionFrame = null;
+        overlay.__motionPoint = next;
+        overlay[setterName](next);
+      }
+    }
+    overlay.__motionFrame = window.requestAnimationFrame(step);
+  }
+
+  function plainLatLng(value) {
+    if (!value) return null;
+    const lat = typeof value.lat === 'function' ? value.lat() : value.lat;
+    const lng = typeof value.lng === 'function' ? value.lng() : value.lng;
+    if (lat == null || lng == null) return null;
+    return { lat: Number(lat), lng: Number(lng) };
+  }
+
+  function latLngDeltaMeters(a, b) {
+    const latScale = 111320;
+    const meanLat = ((a.lat + b.lat) / 2) * Math.PI / 180;
+    const lngScale = Math.max(1, latScale * Math.cos(meanLat));
+    const dx = (b.lng - a.lng) * lngScale;
+    const dy = (b.lat - a.lat) * latScale;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
   function corridorPath(start, end, widthM) {
     const latScale = 111320;
     const meanLat = ((start.lat + end.lat) / 2) * Math.PI / 180;
@@ -1361,6 +1755,46 @@
     if (status === 'approved' || status === 'moved') return '#45d483';
     if (status === 'rejected') return '#626b64';
     return '#efbf55';
+  }
+
+  function zoneColor(zone) {
+    if (zone.status === 'approved' || zone.status === 'moved') return '#45d483';
+    if (zone.status === 'rejected') return '#626b64';
+    if (zone.deployability_class === 'high') return '#65e8ef';
+    if (zone.deployability_class === 'low') return '#ff625d';
+    return '#efbf55';
+  }
+
+  function terrainColor(severity) {
+    if (severity === 'steep') return '#ff625d';
+    if (severity === 'moderate') return '#efbf55';
+    return '#6cb7ff';
+  }
+
+  function dataSourceIcon(stateValue) {
+    const color = stateValue === 'available' || stateValue === 'derived'
+      ? '#45d483'
+      : (stateValue === 'partial' ? '#efbf55' : '#626b64');
+    return {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 7,
+      fillColor: color,
+      fillOpacity: .94,
+      strokeColor: '#061012',
+      strokeWeight: 2,
+    };
+  }
+
+  function vectorIcon(vector) {
+    const color = vector.type === 'synthetic_gap_pressure' ? '#efbf55' : '#ff625d';
+    return {
+      path: 'M 0,-12 L 4,-4 L 12,0 L 4,4 L 0,12 L -4,4 L -12,0 L -4,-4 Z',
+      scale: 1.05,
+      fillColor: color,
+      fillOpacity: .95,
+      strokeColor: '#ffffff',
+      strokeWeight: 1.5,
+    };
   }
 
   function edgeIcon(status, type) {

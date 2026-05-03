@@ -20,6 +20,7 @@
         <div><span id="missionRoute">Ukraine civic demo</span><small>route</small></div>
         <div><span id="missionPhase">Preflight</span><small>phase</small></div>
         <div><span id="streamTime">--</span><small>sim</small></div>
+        <div><span id="routeScore">--</span><small>score</small></div>
         <div><span id="coveragePct">--</span><small>coverage</small></div>
         <div><span id="activeRisk">--</span><small>risk</small></div>
         <div><span id="computeMode">--</span><small>edge mode</small></div>
@@ -72,6 +73,11 @@
           <div><span id="hudThreats">--</span><small>vectors</small></div>
         </div>
         <div class="layer-bar">
+          <button class="layer active" type="button" data-layer="routeScore">Score</button>
+          <button class="layer active" type="button" data-layer="terrain">Terrain</button>
+          <button class="layer active" type="button" data-layer="feasibility">Feasibility</button>
+          <button class="layer active" type="button" data-layer="candidates">Zones</button>
+          <button class="layer active" type="button" data-layer="data">Data</button>
           <button class="layer active" type="button" data-layer="vectors">Vectors</button>
           <button class="layer active" type="button" data-layer="search">Search</button>
           <button class="layer active" type="button" data-layer="links">Links</button>
@@ -81,6 +87,17 @@
           <button class="mode active" type="button" data-camera="follow">Follow</button>
           <button class="mode" type="button" data-camera="fit">Fit</button>
           <button class="mode" type="button" data-camera="free">Free</button>
+        </div>
+        <div class="map-legend" aria-label="Map legend">
+          <div class="legend-title">Legend</div>
+          <span><i class="legend-icon convoy"></i>Convoy</span>
+          <span><i class="legend-icon parent"></i>Parent drone</span>
+          <span><i class="legend-icon small"></i>Small drone</span>
+          <span><i class="legend-icon convoy-edge"></i>Convoy edge</span>
+          <span><i class="legend-icon fixed-edge"></i>Fixed edge</span>
+          <span><i class="legend-icon vector"></i>Synthetic vector</span>
+          <span><i class="legend-icon zone"></i>Candidate zone</span>
+          <span><i class="legend-icon data"></i>Data source</span>
         </div>
         <div id="rerouteWarning" class="reroute-warning">
           <span class="warning-symbol">!</span>
@@ -108,14 +125,25 @@
         </section>
 
         <nav class="rail-tabs" aria-label="Tactical panels">
-          <button class="active" type="button" data-panel="edges">Edges</button>
+          <button class="active" type="button" data-panel="planner">Planner</button>
+          <button type="button" data-panel="conditions">Conditions</button>
+          <button type="button" data-panel="edges">Edges</button>
           <button type="button" data-panel="vectors">Vectors</button>
           <button type="button" data-panel="decisions">Drones</button>
           <button type="button" data-panel="reroutes">Reroute</button>
           <button type="button" data-panel="events">Events</button>
         </nav>
 
-        <section class="panel-block active" data-panel-content="edges">
+        <section class="panel-block active" data-panel-content="planner">
+          <h2>Planner Intelligence</h2>
+          <div id="plannerList" class="planner-list"></div>
+        </section>
+        <section class="panel-block" data-panel-content="conditions">
+          <h2>Live And Context Data</h2>
+          <div id="conditionList" class="condition-list"></div>
+          <div id="sourceList" class="source-list"></div>
+        </section>
+        <section class="panel-block" data-panel-content="edges">
           <h2>Edge Approval Queue</h2>
           <div id="edgeList" class="edge-list"></div>
         </section>

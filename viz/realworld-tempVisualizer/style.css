@@ -139,7 +139,7 @@ button.danger {
 .mission-strip {
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(120px, 1.55fr) repeat(5, minmax(78px, .72fr));
+  grid-template-columns: minmax(120px, 1.55fr) repeat(6, minmax(72px, .66fr));
   gap: 1px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -387,6 +387,95 @@ input:focus {
   background: rgba(101, 232, 239, .12);
 }
 
+.map-legend {
+  position: absolute;
+  left: 14px;
+  top: 214px;
+  display: grid;
+  gap: 7px;
+  width: 170px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 6px;
+  background: rgba(5, 9, 11, .82);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+
+.legend-title {
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #d7e4e2;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.legend-icon {
+  position: relative;
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.legend-icon.convoy {
+  width: 18px;
+  height: 10px;
+  background: var(--amber);
+  clip-path: polygon(0 0, 68% 0, 100% 50%, 68% 100%, 0 100%);
+}
+
+.legend-icon.parent {
+  background: var(--blue);
+  clip-path: polygon(50% 0, 100% 100%, 62% 78%, 50% 100%, 38% 78%, 0 100%);
+}
+
+.legend-icon.small {
+  background: #d3a5ff;
+  transform: rotate(45deg) scale(.82);
+}
+
+.legend-icon.convoy-edge {
+  width: 18px;
+  height: 10px;
+  background: var(--blue);
+  clip-path: polygon(0 0, 100% 0, 100% 68%, 62% 68%, 50% 100%, 38% 68%, 0 68%);
+}
+
+.legend-icon.fixed-edge {
+  background: var(--green);
+  clip-path: polygon(50% 0, 100% 100%, 66% 82%, 50% 100%, 34% 82%, 0 100%);
+}
+
+.legend-icon.vector {
+  background: var(--red);
+  clip-path: polygon(50% 0, 66% 34%, 100% 50%, 66% 66%, 50% 100%, 34% 66%, 0 50%, 34% 34%);
+}
+
+.legend-icon.zone {
+  border: 2px solid var(--cyan);
+  border-radius: 999px;
+  background: rgba(101, 232, 239, .14);
+}
+
+.legend-icon.data {
+  border: 2px solid #061012;
+  border-radius: 999px;
+  background: var(--green);
+}
+
 .reroute-warning {
   position: absolute;
   left: 14px;
@@ -560,12 +649,46 @@ h2 {
 }
 
 .edge-list,
+.planner-list,
+.condition-list,
+.source-list,
 .decision-list,
 .event-list,
 .vector-list,
 .reroute-list {
   display: grid;
   gap: 7px;
+}
+
+.source-list {
+  margin-top: 8px;
+}
+
+.source-state {
+  text-transform: uppercase;
+}
+
+.source-state.available,
+.source-state.derived { color: var(--green); }
+
+.source-state.partial { color: var(--amber); }
+
+.source-state.unavailable { color: var(--muted); }
+
+.factor-bar {
+  position: relative;
+  height: 7px;
+  margin-top: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+}
+
+.factor-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--red), var(--amber), var(--green));
 }
 
 .summary,
@@ -711,8 +834,9 @@ body.presentation .mission-ribbon {
 }
 
 body.presentation [data-panel-content] { display: none; }
+body.presentation [data-panel-content="planner"],
 body.presentation [data-panel-content="vectors"],
-body.presentation [data-panel-content="decisions"],
+body.presentation [data-panel-content="conditions"],
 body.presentation [data-panel-content="reroutes"] { display: block; }
 
 body.presentation .tactical-rail {
@@ -737,6 +861,7 @@ body.presentation .button-row.mini { display: none; }
   .ops-grid { grid-template-columns: 1fr; grid-template-rows: 64vh auto; }
   .tactical-rail { border-left: none; border-top: 1px solid var(--border); }
   .mission-ribbon,
+  .map-legend,
   .map-hud,
   .reroute-warning {
     width: auto;
@@ -755,5 +880,6 @@ body.presentation .button-row.mini { display: none; }
     flex-wrap: wrap;
   }
   .map-hud { display: none; }
+  .map-legend { display: none; }
   .mission-ribbon { min-width: 0; }
 }
