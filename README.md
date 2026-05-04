@@ -1,5 +1,7 @@
 # HADES: Hierarchical Autonomous Drone Edge System
 
+[Demo video](https://www.youtube.com/watch?v=cuLlt9UxrS0)
+
 HADES is a simulation and training project for defensive autonomous drone swarms operating around a convoy, route, or protected area when communications are degraded and compute is scarce. The core idea is simple: one drone with one camera is useful, but a hierarchy of small scouts, parent relay drones, edge compute nodes, and convoy-side command logic can keep working when a single operator feed, cloud server, or cellular link fails.
 
 The project is security-first, but not security-only. The same technical problem appears in humanitarian response, public safety, disaster logistics, search and rescue, wildfire response, and infrastructure inspection: people need fast aerial perception and safe route decisions before the ground picture is complete.
