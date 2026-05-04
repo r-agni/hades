@@ -388,7 +388,7 @@ flowchart LR
 
 ## Implementation Map
 
-Primary RL files in `C:\Users\agni_\Documents\HADES-rl-training`:
+Primary RL files in `<rl-training branch>`:
 
 | Path | Role |
 |---|---|

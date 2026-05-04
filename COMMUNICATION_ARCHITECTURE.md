@@ -384,7 +384,7 @@ HADES treats the communication system as part of the mission, not plumbing that 
 
 ## Implementation Map
 
-Primary implementation references in `C:\Users\agni_\Documents\HADES-rl-training`:
+Primary implementation references in `<rl-training branch>`:
 
 | File | Responsibility |
 |---|---|
@@ -397,7 +397,7 @@ Primary implementation references in `C:\Users\agni_\Documents\HADES-rl-training
 | `hades/navigation.py` | Convoy route selection and threat-aware navigation logic |
 | `bridge/sim_publisher.py` | 10 Hz frame production for bridge, demo, and tests |
 
-Primary planning reference in `C:\Users\agni_\Documents\HADES-main`:
+Primary planning reference in `<repo root>`:
 
 | File | Responsibility |
 |---|---|
